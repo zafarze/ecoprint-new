@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-[#f5f7fa] to-[#c3cfe2] text-slate-800 min-h-screen antialiased;
+  }
+}
+
+@layer utilities {
+  /* Фирменные градиенты EcoPrint с прямым указанием HEX-кодов */
+  .bg-gradient-eco {
+    @apply bg-gradient-to-br from-[#ec4899] to-[#0088cc] text-white;
+  }
+  .bg-gradient-eco-hover {
+    @apply bg-gradient-to-br from-[#db2777] to-[#0066aa] text-white;
+  }
+  
+  /* Градиентный текст */
+  .text-gradient-eco {
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-[#ec4899] to-[#0088cc];
+  }
+}
