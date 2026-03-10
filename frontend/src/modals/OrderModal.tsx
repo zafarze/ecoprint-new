@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
 	Trash2, Plus, Save, User, Package, CheckCircle2,
-	LayoutList, X, Clock, ChevronDown, MessageSquare
+	LayoutList, Clock, ChevronDown, MessageSquare
 } from 'lucide-react';
 import BaseModal from '../components/ui/BaseModal';
 import Button from '../components/ui/Button';

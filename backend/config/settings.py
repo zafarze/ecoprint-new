@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from datetime import timedelta # Добавили для настройки времени жизни токенов
+from datetime import timedelta
+import dj_database_url # <--- ДОБАВЛЕНО ДЛЯ CLOUD RUN И ОБЛАЧНОЙ БД
 
 # 1. Сначала находим BASE_DIR (путь к папке backend)
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,17 +13,14 @@ load_dotenv(dotenv_path=env_path)
 
 
 # Quick-start development settings - unsuitable for production
-# Секретный ключ теперь берется из файла .env
-SECRET_KEY = os.environ.get('SECRET_KEY')
-
-# Режим дебага тоже берем из .env
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-key')
 DEBUG = os.environ.get('DEBUG') == 'True'
 
-ALLOWED_HOSTS = ['*'] # Для разработки можно поставить '*', на проде укажешь свой домен
+# Разрешаем запросы с любых IP (нужно для облака)
+ALLOWED_HOSTS = ['*'] 
 
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -33,9 +31,8 @@ INSTALLED_APPS = [
     
     # Наши новые библиотеки для работы с React:
     'rest_framework',
-    'rest_framework_simplejwt', # Добавили библиотеку для JWT токенов
+    'rest_framework_simplejwt',
     'corsheaders',
-    
     
     # Наше локальное приложение EcoPrint:
     'app',
@@ -43,6 +40,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # <--- ОБЯЗАТЕЛЬНО: WhiteNoise для раздачи CSS админки в облаке
     'django.contrib.sessions.middleware.SessionMiddleware',
     
     # CORS Middleware ОБЯЗАТЕЛЬНО должен быть выше CommonMiddleware
@@ -55,7 +53,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Указывает на config вместо core
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
@@ -73,92 +70,89 @@ TEMPLATES = [
     },
 ]
 
-# Указывает на config вместо core
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
-# Теперь используем PostgreSQL и берем данные из .env
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME'),
-        'USER': os.environ.get('DB_USER'),
-        'PASSWORD': os.environ.get('DB_PASSWORD'),
-        'HOST': os.environ.get('DB_HOST'),
-        'PORT': os.environ.get('DB_PORT'),
+# ==========================================
+# НАСТРОЙКА БАЗЫ ДАННЫХ (УМНОЕ ПЕРЕКЛЮЧЕНИЕ ДЛЯ GOOGLE CLOUD)
+# ==========================================
+# Если переменная RUN_ON_CLOUD_RUN равна True, значит сервер запущен в Google
+if os.environ.get('RUN_ON_CLOUD_RUN') == 'True':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME'),
+            'USER': os.environ.get('DB_USER'),
+            'PASSWORD': os.environ.get('DB_PASSWORD'),
+            # Google Cloud SQL подключается через специальный сокет-путь
+            'HOST': f"/cloudsql/{os.environ.get('CLOUD_SQL_CONNECTION_NAME')}",
+        }
     }
-}
-
-if not os.environ.get('DB_NAME'):
-    print("ВНИМАНИЕ: Файл .env не загрузился!")
-
-# Password validation
+else:
+    # Локальная база данных на твоем ПК (для разработки)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME'),
+            'USER': os.environ.get('DB_USER'),
+            'PASSWORD': os.environ.get('DB_PASSWORD'),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-
 # Internationalization
-LANGUAGE_CODE = 'ru-ru' # Сразу поставим русский язык для админки
-
-TIME_ZONE = 'UTC'
-
+LANGUAGE_CODE = 'ru-ru'
+TIME_ZONE = 'Asia/Dushanbe' # Установил правильный часовой пояс для Таджикистана
 USE_I18N = True
-
 USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
+# ==========================================
+# СТАТИКА (STATIC FILES) ДЛЯ ОБЛАКА
+# ==========================================
 STATIC_URL = 'static/'
+# Папка, куда соберется вся статика при команде collectstatic
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Алгоритм кэширования и сжатия статики от WhiteNoise
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# --- НАСТРОЙКИ CORS ---
-# Разрешаем запросы с локального сервера Vite (React)
+# ==========================================
+# НАСТРОЙКИ CORS
+# ==========================================
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    # Добавили твой домен на Firebase!
+    "https://ecoprint-app.web.app",
+    "https://ecoprint-app.firebaseapp.com"
 ]
 
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization', # Самое важное!
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    'accept', 'accept-encoding', 'authorization', 'content-type',
+    'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
 ]
 
-# --- НАСТРОЙКИ REST FRAMEWORK ---
+# ==========================================
+# НАСТРОЙКИ REST FRAMEWORK & JWT
+# ==========================================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
 
-# --- НАСТРОЙКИ JWT ТОКЕНОВ ---
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), # Токен живет 1 день
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7), # Рефреш токен живет 7 дней
-    'AUTH_HEADER_TYPES': ('Bearer',), # React будет отправлять "Bearer <token>"
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), 
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
-
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')

@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-	Plus, Filter, Search, Edit2, Archive, Loader2, PackageOpen,
-	CheckCircle2, Clock, X, Package, PlayCircle, Flag, User,
+	Plus, Search, Edit2, Archive, Loader2, PackageOpen,
+	X, PlayCircle, Flag, User,
 	MessageSquare, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, Copy, Phone
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -15,7 +15,6 @@ import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 
 export default function OrdersPage() {
 	const [orders, setOrders] = useState<any[]>([]);
-	const [products, setProducts] = useState<any[]>([]);
 
 	// Фильтры
 	const [searchQuery, setSearchQuery] = useState('');
@@ -56,21 +55,6 @@ export default function OrdersPage() {
 		await fetchOrdersSilently();
 		setIsLoading(false);
 	};
-
-	const loadProducts = async () => {
-		const token = localStorage.getItem('token');
-		try {
-			const res = await fetch('http://127.0.0.1:8000/api/products/', { headers: { 'Authorization': `Bearer ${token}` } });
-			if (res.ok) setProducts(await res.json());
-		} catch (err) { }
-	};
-
-	useEffect(() => {
-		loadOrders();
-		loadProducts();
-		const intervalId = setInterval(() => { if (!isModalOpenRef.current) fetchOrdersSilently(); }, 10000);
-		return () => clearInterval(intervalId);
-	}, []);
 
 	// === 2. ДЕЙСТВИЯ ===
 	const handleToggleItemStatus = async (item: any, orderId: number) => {
