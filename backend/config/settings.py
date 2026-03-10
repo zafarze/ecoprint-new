@@ -89,17 +89,18 @@ if os.environ.get('RUN_ON_CLOUD_RUN') == 'True':
         }
     }
 else:
-    # Локальная база данных на твоем ПК (для разработки)
+    # Локальная база данных на твоем ПК (для разработки) + ЗАГЛУШКИ ДЛЯ DOCKER BUILD
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME'),
-            'USER': os.environ.get('DB_USER'),
-            'PASSWORD': os.environ.get('DB_PASSWORD'),
+            'NAME': os.environ.get('DB_NAME', 'dummy_db'),
+            'USER': os.environ.get('DB_USER', 'dummy_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'dummy_pass'),
             'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
             'PORT': os.environ.get('DB_PORT', '5432'),
         }
     }
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -112,6 +113,7 @@ LANGUAGE_CODE = 'ru-ru'
 TIME_ZONE = 'Asia/Dushanbe' # Установил правильный часовой пояс для Таджикистана
 USE_I18N = True
 USE_TZ = True
+
 # ==========================================
 # СТАТИКА (STATIC FILES) ДЛЯ ОБЛАКА
 # ==========================================
