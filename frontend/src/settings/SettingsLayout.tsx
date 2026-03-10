@@ -1,14 +1,16 @@
+// src/settings/SettingsLayout.tsx
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import SettingsPage from '../pages/SettingsPage';
 
 export default function SettingsLayout() {
 	const location = useLocation();
+
+	// Проверяем, находимся ли мы на главной странице настроек
 	const isRootSettings = location.pathname === '/settings' || location.pathname === '/settings/';
 
 	return (
 		<div className="w-full max-w-5xl mx-auto">
-			{/* Кнопка "Назад" плавно появляется, если мы внутри подраздела */}
+			{/* Кнопка "Назад" показывается только внутри подразделов */}
 			{!isRootSettings && (
 				<div className="mb-6 animate-in fade-in slide-in-from-left-4">
 					<Link
@@ -20,8 +22,8 @@ export default function SettingsLayout() {
 				</div>
 			)}
 
-			{/* Роутинг */}
-			{isRootSettings ? <SettingsPage /> : <Outlet />}
+			{/* Outlet автоматически подставит нужный компонент из App.tsx */}
+			<Outlet />
 		</div>
 	);
 }

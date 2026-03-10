@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { PackageSearch, Edit2, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import Card from '../components/ui/Card';
 import ProductModal from '../modals/ProductModal';
 import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 
@@ -11,7 +14,10 @@ export default function ProductManagement() {
 	const [productToDelete, setProductToDelete] = useState<any>(null);
 
 	const loadProducts = () => {
-		fetch('http://127.0.0.1:8000/api/products/')
+		const token = localStorage.getItem('token');
+		fetch('http://127.0.0.1:8000/api/products/', {
+			headers: { 'Authorization': `Bearer ${token}` }
+		})
 			.then(res => res.json())
 			.then(data => setProducts(data))
 			.catch(err => console.error(err));
@@ -29,13 +35,27 @@ export default function ProductManagement() {
 	const handleSaveProduct = async (productData: any) => {
 		const url = editingProduct ? `http://127.0.0.1:8000/api/products/${editingProduct.id}/` : 'http://127.0.0.1:8000/api/products/';
 		const method = editingProduct ? 'PUT' : 'POST';
+		const token = localStorage.getItem('token');
 
 		try {
-			await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(productData) });
-			setIsModalOpen(false);
-			loadProducts();
-		} catch (e) {
-			console.error(e);
+			const res = await fetch(url, {
+				method,
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${token}`
+				},
+				body: JSON.stringify(productData)
+			});
+
+			if (res.ok) {
+				toast.success(editingProduct ? 'Товар обновлен' : 'Товар добавлен');
+				setIsModalOpen(false);
+				loadProducts();
+			} else {
+				toast.error('Ошибка сохранения');
+			}
+		} catch (error) {
+			console.error(error);
 		}
 	};
 
@@ -46,62 +66,94 @@ export default function ProductManagement() {
 
 	const confirmDelete = async () => {
 		if (!productToDelete) return;
+		const token = localStorage.getItem('token');
+
 		try {
-			await fetch(`http://127.0.0.1:8000/api/products/${productToDelete.id}/`, { method: 'DELETE' });
+			const res = await fetch(`http://127.0.0.1:8000/api/products/${productToDelete.id}/`, {
+				method: 'DELETE',
+				headers: { 'Authorization': `Bearer ${token}` }
+			});
+
+			if (res.ok) {
+				toast.success('Товар удален');
+				loadProducts();
+			} else {
+				toast.error('Ошибка при удалении');
+			}
+		} catch (error) {
+			console.error(error);
+		} finally {
 			setIsDeleteModalOpen(false);
-			loadProducts();
-		} catch (e) {
-			console.error(e);
 		}
 	};
 
+	const getCategoryName = (cat: string) => {
+		const categories: any = {
+			'polygraphy': 'Полиграфия',
+			'packaging': 'Упаковка',
+			'souvenirs': 'Сувениры',
+			'large-format': 'Широкоформатная печать'
+		};
+		return categories[cat] || cat;
+	};
+
 	return (
-		<>
-			<div className="filters-card" style={{ marginBottom: '20px' }}>
-				<div className="filters-header">
-					<div className="filters-header-title">
-						<i className="fas fa-boxes"></i>
-						<span>Ассортимент товаров</span>
-					</div>
-					<button className="btn btn-content" onClick={() => handleOpenModal()}>
-						<i className="fas fa-plus"></i> Добавить товар
-					</button>
-				</div>
+		<div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4">
+			<div className="flex items-center justify-between mb-6">
+				<h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+					<PackageSearch className="text-indigo-500" size={28} strokeWidth={2.5} />
+					Справочник товаров
+				</h2>
+				<button onClick={() => handleOpenModal()} className="bg-gradient-eco text-white px-5 py-2.5 rounded-xl font-bold shadow-md hover:shadow-lg transition-all active:scale-95">
+					+ Добавить товар
+				</button>
 			</div>
 
-			<div className="table-card">
-				<table>
-					<thead>
-						<tr>
-							<th>Название</th>
-							<th>Категория</th>
-							<th>Иконка</th>
-							<th>Действия</th>
-						</tr>
-					</thead>
-					<tbody>
-						{products.map(p => (
-							<tr key={p.id}>
-								<td><strong>{p.name}</strong></td>
-								<td>{p.category === 'polygraphy' ? 'Полиграфия' : p.category === 'packaging' ? 'Упаковка' : p.category === 'souvenirs' ? 'Сувениры' : 'Широкоформатная печать'}</td>
-								<td>
-									<i className={p.icon} style={{ fontSize: '18px', color: 'var(--text-color)', marginRight: '10px' }}></i>
-									<span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-light)' }}>{p.icon}</span>
-								</td>
-								<td>
-									<div className="actions">
-										<button className="icon-btn" onClick={() => handleOpenModal(p)}><i className="fas fa-edit"></i></button>
-										<button className="icon-btn delete" onClick={() => handleDeleteClick(p)}><i className="fas fa-trash"></i></button>
-									</div>
-								</td>
+			<Card noPadding>
+				<div className="overflow-x-auto">
+					<table className="w-full text-sm text-left">
+						<thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase text-xs">
+							<tr>
+								<th className="px-6 py-4 rounded-tl-3xl">Название</th>
+								<th className="px-6 py-4">Категория</th>
+								<th className="px-6 py-4">Иконка</th>
+								<th className="px-6 py-4 text-right rounded-tr-3xl">Действия</th>
 							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
+						</thead>
+						<tbody className="divide-y divide-slate-100">
+							{products.map(p => (
+								<tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
+									<td className="px-6 py-4 font-bold text-slate-800">{p.name}</td>
+									<td className="px-6 py-4">
+										<span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200">
+											{getCategoryName(p.category)}
+										</span>
+									</td>
+									<td className="px-6 py-4">
+										<div className="flex items-center gap-2">
+											<i className={p.icon} style={{ color: '#64748b' }}></i>
+											<span className="text-xs font-mono text-slate-400">{p.icon}</span>
+										</div>
+									</td>
+									<td className="px-6 py-4 text-right">
+										<div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+											<button onClick={() => handleOpenModal(p)} className="p-2 text-slate-400 hover:text-primary bg-white hover:border-primary border border-slate-200 rounded-xl shadow-sm transition-all">
+												<Edit2 size={16} />
+											</button>
+											<button onClick={() => handleDeleteClick(p)} className="p-2 text-slate-400 hover:text-red-500 bg-white hover:border-red-500 border border-slate-200 rounded-xl shadow-sm transition-all">
+												<Trash2 size={16} />
+											</button>
+										</div>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</Card>
 
 			<ProductModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveProduct} initialData={editingProduct} />
-			<ConfirmDeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} title="Удаление товара" itemName={productToDelete?.name} />
-		</>
+			<ConfirmDeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} title="Удалить товар" itemName={productToDelete?.name || ''} />
+		</div>
 	);
 }

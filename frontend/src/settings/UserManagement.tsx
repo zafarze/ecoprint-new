@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserPlus, Edit2, Trash2, Users, ShieldAlert } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
 import UserModal from '../modals/UserModal';
 import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 
@@ -14,7 +14,10 @@ export default function UserManagement() {
 	const [userToDelete, setUserToDelete] = useState<any>(null);
 
 	const loadUsers = () => {
-		fetch('http://127.0.0.1:8000/api/users/')
+		const token = localStorage.getItem('token');
+		fetch('http://127.0.0.1:8000/api/users/', {
+			headers: { 'Authorization': `Bearer ${token}` }
+		})
 			.then(res => res.json())
 			.then(data => setUsers(data))
 			.catch(err => console.error(err));
@@ -28,7 +31,8 @@ export default function UserManagement() {
 	};
 
 	const handleSaveUser = async (userData: any) => {
-		console.log("Сохранение пользователя:", userData);
+		console.log("Сохранение пользователя (заглушка API):", userData);
+		toast.success('Пользователь сохранен!');
 		setIsModalOpen(false);
 	};
 
@@ -37,49 +41,65 @@ export default function UserManagement() {
 		setIsDeleteModalOpen(true);
 	};
 
-	const confirmDelete = () => {
-		console.log("Удаляем:", userToDelete);
-		setIsDeleteModalOpen(false);
+	const confirmDelete = async () => {
+		if (!userToDelete) return;
+		const token = localStorage.getItem('token');
+		try {
+			const res = await fetch(`http://127.0.0.1:8000/api/users/${userToDelete.id}/`, {
+				method: 'DELETE',
+				headers: { 'Authorization': `Bearer ${token}` }
+			});
+			if (res.ok) {
+				toast.success('Пользователь удален');
+				loadUsers();
+			} else {
+				toast.error('Ошибка при удалении');
+			}
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setIsDeleteModalOpen(false);
+		}
 	};
 
 	return (
-		<div className="max-w-4xl animate-in fade-in slide-in-from-bottom-4">
-
-			<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+		<div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4">
+			<div className="flex items-center justify-between mb-6">
 				<h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
 					<Users className="text-purple-500" size={28} strokeWidth={2.5} />
 					Сотрудники
 				</h2>
-				<Button onClick={() => handleOpenModal()} icon={<UserPlus size={18} />}>
-					Добавить
-				</Button>
+				<button onClick={() => handleOpenModal()} className="bg-gradient-eco text-white px-5 py-2.5 rounded-xl font-bold shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2">
+					<UserPlus size={18} /> Добавить
+				</button>
 			</div>
 
-			<Card noPadding className="overflow-hidden">
-				<div className="overflow-x-auto custom-scrollbar">
-					<table className="w-full text-left border-collapse">
-						<thead>
-							<tr className="bg-slate-50/50 border-b border-slate-100 text-slate-400 text-xs uppercase font-black tracking-wider">
-								<th className="px-6 py-5">Пользователь</th>
-								<th className="px-6 py-5">Email</th>
-								<th className="px-6 py-5 text-center">Роль</th>
-								<th className="px-6 py-5 text-right">Действия</th>
+			<Card noPadding>
+				<div className="overflow-x-auto">
+					<table className="w-full text-sm text-left">
+						<thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase text-xs">
+							<tr>
+								<th className="px-6 py-4 rounded-tl-3xl">Сотрудник</th>
+								<th className="px-6 py-4">Логин</th>
+								<th className="px-6 py-4">Email</th>
+								<th className="px-6 py-4 text-center">Роль</th>
+								<th className="px-6 py-4 text-right rounded-tr-3xl">Действия</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
 							{users.map(u => (
-								<tr key={u.id} className="hover:bg-slate-50 transition-colors group">
+								<tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
 									<td className="px-6 py-4">
 										<div className="flex items-center gap-3">
-											<div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-100 to-blue-100 text-purple-700 font-black flex items-center justify-center">
-												{u.username.charAt(0).toUpperCase()}
+											<div className="w-10 h-10 rounded-full bg-gradient-eco flex items-center justify-center text-white font-black text-sm shadow-sm">
+												{(u.first_name?.[0] || u.username[0]).toUpperCase()}
 											</div>
 											<div>
-												<div className="font-black text-slate-800">{u.username}</div>
-												<div className="text-xs font-bold text-slate-400">{u.first_name} {u.last_name}</div>
+												<p className="font-bold text-slate-800">{u.first_name} {u.last_name}</p>
 											</div>
 										</div>
 									</td>
+									<td className="px-6 py-4 font-mono text-xs font-bold text-slate-500">@{u.username}</td>
 									<td className="px-6 py-4 font-bold text-slate-600">{u.email || '—'}</td>
 									<td className="px-6 py-4 text-center">
 										<span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200 inline-flex items-center gap-1">
@@ -104,7 +124,7 @@ export default function UserManagement() {
 			</Card>
 
 			<UserModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveUser} initialData={editingUser} />
-			<ConfirmDeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} title="Удалить сотрудника?" itemName={userToDelete?.username} />
+			<ConfirmDeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} title="Деактивировать сотрудника?" itemName={userToDelete?.username || ''} />
 		</div>
 	);
 }

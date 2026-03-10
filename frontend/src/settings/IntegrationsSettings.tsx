@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Send, Save, MessageSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Send, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input, Label } from '../components/ui/Form';
@@ -7,11 +8,58 @@ import { Input, Label } from '../components/ui/Form';
 export default function IntegrationsSettings() {
 	const [botToken, setBotToken] = useState('');
 	const [chatId, setChatId] = useState('');
+	const [isLoading, setIsLoading] = useState(true);
+	const [isSaving, setIsSaving] = useState(false);
 
-	const handleSubmit = (e: React.FormEvent) => {
+	useEffect(() => {
+		const fetchSettings = async () => {
+			const token = localStorage.getItem('token');
+			try {
+				const res = await fetch('http://127.0.0.1:8000/api/settings/telegram/', {
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				if (res.ok) {
+					const data = await res.json();
+					setBotToken(data.bot_token || '');
+					setChatId(data.chat_id || '');
+				}
+			} catch (error) {
+				console.error('Ошибка загрузки настроек Telegram:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+		fetchSettings();
+	}, []);
+
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		alert("Интеграция с Telegram сохранена!");
+		setIsSaving(true);
+		const token = localStorage.getItem('token');
+
+		try {
+			const res = await fetch('http://127.0.0.1:8000/api/settings/telegram/', {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${token}`
+				},
+				body: JSON.stringify({ bot_token: botToken, chat_id: chatId })
+			});
+
+			if (res.ok) {
+				toast.success("Интеграция с Telegram сохранена!");
+			} else {
+				toast.error("Ошибка при сохранении.");
+			}
+		} catch (error) {
+			toast.error("Ошибка соединения с сервером.");
+		} finally {
+			setIsSaving(false);
+		}
 	};
+
+	if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>;
 
 	return (
 		<div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4">
@@ -38,18 +86,15 @@ export default function IntegrationsSettings() {
 							type="text"
 							value={chatId}
 							onChange={e => setChatId(e.target.value)}
-							placeholder="Например: 123456789"
+							placeholder="Например: -100123456789"
 						/>
-						<p className="text-xs font-bold text-slate-400 mt-2 flex items-center gap-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-							<MessageSquare size={14} className="text-primary" />
-							Чтобы узнать свой Chat ID, напишите @userinfobot в Telegram.
+						<p className="text-xs font-bold text-slate-400 mt-2 flex items-center gap-1.5 border-l-2 border-slate-200 pl-3">
+							ID группы, куда бот будет присылать уведомления о новых заказах.
 						</p>
 					</div>
 
-					<div className="pt-6 mt-6 border-t border-slate-100 flex justify-end">
-						<Button type="submit" icon={<Save size={18} />}>
-							Сохранить интеграцию
-						</Button>
+					<div className="pt-4 flex justify-end">
+						<Button type="submit" isLoading={isSaving}>Сохранить интеграцию</Button>
 					</div>
 				</form>
 			</Card>

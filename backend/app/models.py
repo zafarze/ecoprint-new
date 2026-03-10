@@ -22,7 +22,13 @@ class Order(models.Model):
         verbose_name="Статус заказа"
     )
     is_received = models.BooleanField(default=False, verbose_name="Получен клиентом")
+    
+    # Поле для архива (оно используется в фильтрах на фронтенде)
+    is_archived = models.BooleanField(default=False, verbose_name="В архиве") 
+    
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+    # НОВОЕ ПОЛЕ: Автоматически обновляется при каждом сохранении заказа
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен") 
 
     class Meta:
         verbose_name = "Заказ"
@@ -50,7 +56,9 @@ class Order(models.Model):
             
         if old_status != new_status:
             self.status = new_status
-            self.save(update_fields=['status'])
+            # ВАЖНО: Добавили 'updated_at' в update_fields, 
+            # чтобы время обновления точно зафиксировалось при смене статуса
+            self.save(update_fields=['status', 'updated_at'])
 
 # === Модель Товара в Заказе ===
 class Item(models.Model):
@@ -114,15 +122,24 @@ class Item(models.Model):
         return f"{self.name} ({self.quantity} шт.)"
 
     def save(self, *args, **kwargs):
-        if self.status == 'ready' and self.ready_at is None:
-            self.ready_at = timezone.now()
-        elif self.status != 'ready':
-            self.ready_at = None
+        # Если у товара есть название
+        if self.name:
+            clean_name = self.name.strip()
             
+            # Импортируем Product тут, чтобы не было ошибки порядка классов в файле
+            from .models import Product 
+            
+            # Проверяем, есть ли уже такой товар (name__iexact ищет без учета регистра, 
+            # чтобы "Визитки" и "визитки" не создавали дубликатов)
+            if not Product.objects.filter(name__iexact=clean_name).exists():
+                Product.objects.create(
+                    name=clean_name,
+                    category='polygraphy',  # Категория по умолчанию (Полиграфия)
+                    icon='fas fa-box-open'  # Иконка по умолчанию
+                )
+                
+        # Обязательно вызываем стандартное сохранение
         super().save(*args, **kwargs)
-        
-        if self.order_id:
-            self.order.update_status()
 
 # === Модель Профиля ===
 class Profile(models.Model):

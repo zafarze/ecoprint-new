@@ -49,7 +49,6 @@ export default function LoginPage() {
 		setError('');
 
 		try {
-			// Отправляем запрос на эндпоинт получения токена (SimpleJWT)
 			const response = await fetch('http://127.0.0.1:8000/api/token/', {
 				method: 'POST',
 				headers: {
@@ -60,17 +59,21 @@ export default function LoginPage() {
 
 			if (response.ok) {
 				const data = await response.json();
+				console.log("Успешный логин! Ответ сервера:", data);
 
-				// Сохраняем токен (access токен для авторизации последующих запросов)
-				localStorage.setItem('token', data.access || data.token);
+				// Сохраняем access токен
+				localStorage.setItem('token', data.access);
 
-				// Можно также сохранить имя пользователя для отображения в хедере дашборда
-				localStorage.setItem('user', JSON.stringify({ username }));
+				// СОХРАНЯЕМ ПОЛНЫЕ ДАННЫЕ ПОЛЬЗОВАТЕЛЯ (Имя, Фамилия, Email), которые прислал Django!
+				if (data.user) {
+					localStorage.setItem('user', JSON.stringify(data.user));
+				} else {
+					localStorage.setItem('user', JSON.stringify({ username }));
+				}
 
 				// Перекидываем пользователя на главную страницу (Дашборд)
 				navigate('/');
 			} else {
-				// Если сервер ответил ошибкой (например, неверный пароль)
 				setError('Неверный логин или пароль');
 			}
 		} catch (err) {
@@ -189,7 +192,7 @@ export default function LoginPage() {
 									<motion.div
 										initial={{ opacity: 0, height: 0, marginBottom: 0 }}
 										animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
-										exit={{ opacity: 0, height: 0, mb: 0 }}
+										exit={{ opacity: 0, height: 0, marginBottom: 0 }}
 										className="w-full bg-red-50/80 backdrop-blur-sm text-red-500 text-xs font-bold py-3 rounded-xl border border-red-100 flex items-center justify-center gap-2 overflow-hidden"
 									>
 										<span className="text-lg">⚠️</span> {error}

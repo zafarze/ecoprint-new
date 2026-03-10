@@ -65,8 +65,8 @@ export default function StatisticsPage() {
 	}));
 
 	// Вспомогательный компонент для карточки-статистики
-	const StatWidget = ({ title, value, icon: Icon, colorClass, delay }: any) => (
-		<Card className={`relative overflow-hidden group animate-in fade-in slide-in-from-bottom-4`} style={{ animationDelay: delay }}>
+	const StatWidget = ({ title, value, icon: Icon, colorClass }: any) => (
+		<Card className={`relative overflow-hidden group animate-in fade-in slide-in-from-bottom-4`}>
 			<div className="flex items-center justify-between">
 				<div>
 					<p className="text-sm font-bold text-slate-400 mb-1">{title}</p>
@@ -105,8 +105,8 @@ export default function StatisticsPage() {
 							key={p.id}
 							onClick={() => setPeriod(p.id)}
 							className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${period === p.id
-									? 'bg-white text-primary shadow-sm'
-									: 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+								? 'bg-white text-primary shadow-sm'
+								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
 								}`}
 						>
 							{p.label}
@@ -186,7 +186,7 @@ export default function StatisticsPage() {
 										dataKey="value"
 										stroke="none"
 									>
-										{pieData.map((entry, index) => (
+										{pieData.map((_, index) => (
 											<Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
 										))}
 									</Pie>

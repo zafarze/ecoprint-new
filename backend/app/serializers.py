@@ -1,18 +1,43 @@
+# app/serializers.py
 from rest_framework import serializers
 from django.db import transaction
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-# Импортируем наши новые модели
-from .models import Order, Item, Product, OrderHistory
+# Импортируем наши модели
+from .models import CompanySettings, TelegramSettings, Order, Item, Product, OrderHistory
 
 # Импортируем твой сервис для обработки бизнес-логики
 from .services import OrderService
+
+# ==========================================
+# JWT АВТОРИЗАЦИЯ (Кастомный токен)
+# ==========================================
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        # Добавляем данные пользователя в ответ вместе с токеном
+        data['user'] = {
+            'id': self.user.id,
+            'username': self.user.username,
+            'first_name': self.user.first_name,
+            'last_name': self.user.last_name,
+            'email': self.user.email,
+            'is_superuser': self.user.is_superuser,
+        }
+        return data
+
+
+# ==========================================
+# БИЗНЕС-СЕРИАЛИЗАТОРЫ
+# ==========================================
 
 # 1. Сериализатор Пользователя (для отображения ответственных)
 class UserSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name']
+        fields = ['id', 'username', 'first_name', 'last_name', 'email']
 
 # 2. Сериализатор Товаров (шаблонов)
 class ProductSerializer(serializers.ModelSerializer):
@@ -27,11 +52,13 @@ class OrderHistorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderHistory
-        fields = ['user_name', 'message', 'created_at_formatted']
+        # Обязательно отдаем и чистый created_at, и отформатированный
+        fields = ['id', 'user_name', 'message', 'created_at_formatted', 'created_at']
 
     def get_user_name(self, obj):
         if obj.user:
-            return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+            name = f"{obj.user.first_name} {obj.user.last_name}".strip()
+            return name if name else obj.user.username
         return "Система"
 
     def get_created_at_formatted(self, obj):
@@ -46,8 +73,11 @@ class ItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Item
-        fields = ['id', 'name', 'quantity', 'status', 'deadline', 'comment',
-                  'responsible_user', 'responsible_user_id', 'is_archived', 'ready_at']
+        # Убрали 'created_at' из списка, так как дата берется из самого заказа
+        fields = [
+            'id', 'name', 'quantity', 'status', 'deadline', 'comment',
+            'responsible_user', 'responsible_user_id', 'is_archived'
+        ]
 
 # 5. Сериализатор для записи (создания/обновления) Товара
 class ItemWriteSerializer(serializers.ModelSerializer):
@@ -68,11 +98,15 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'client', 'client_phone', 'status', 'is_received', 'created_at', 'items', 'items_write', 'history']
+        # Добавлены is_archived и updated_at для корректной работы фронтенда и логики архивации
+        fields = [
+            'id', 'client', 'client_phone', 'status', 'is_received', 'is_archived', 
+            'created_at', 'updated_at', 'items', 'items_write', 'history'
+        ]
         read_only_fields = ['status'] # Защищаем статус от прямого редактирования
 
     def get_items(self, obj):
-        # По умолчанию показываем не архивные
+        # По умолчанию показываем не архивные товары (защита от мусора)
         show_archived = self.context.get('show_archived', False)
         if show_archived:
             items_to_show = obj.items.filter(is_archived=True)
@@ -108,3 +142,17 @@ class OrderSerializer(serializers.ModelSerializer):
             user=user
         )
         return updated_order
+    
+
+# ==========================================
+# СЕРИАЛИЗАТОРЫ НАСТРОЕК (SINGLETON)
+# ==========================================
+class CompanySettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanySettings
+        fields = ['company_name', 'address', 'phone']
+
+class TelegramSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TelegramSettings
+        fields = ['bot_token', 'chat_id']

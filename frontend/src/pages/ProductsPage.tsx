@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Loader2, PackageSearch, Package } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Edit2, Trash2, Loader2, PackageSearch } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProductModal from '../modals/ProductModal';
+import ConfirmDeleteModal from '../modals/ConfirmDeleteModal'; // Добавили красивую модалку удаления
 
 // Словарь для красивого отображения категорий с цветами
 const categoryConfig: Record<string, { label: string, colorClass: string }> = {
@@ -13,12 +16,17 @@ const categoryConfig: Record<string, { label: string, colorClass: string }> = {
 };
 
 export default function ProductsPage() {
+	const navigate = useNavigate();
 	const [products, setProducts] = useState<any[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 
-	// Состояния для модального окна
+	// Состояния для модального окна редактирования
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [editingProduct, setEditingProduct] = useState<any>(null);
+
+	// Состояния для модального окна удаления
+	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+	const [productToDelete, setProductToDelete] = useState<any>(null);
 
 	const fetchProducts = async () => {
 		setIsLoading(true);
@@ -27,12 +35,21 @@ export default function ProductsPage() {
 			const res = await fetch('http://127.0.0.1:8000/api/products/', {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
+
+			// Обрабатываем протухший токен
+			if (res.status === 401) {
+				localStorage.removeItem('token');
+				navigate('/login');
+				return;
+			}
+
 			if (res.ok) {
 				const data = await res.json();
 				setProducts(data);
 			}
 		} catch (err) {
 			console.error("Ошибка загрузки:", err);
+			toast.error("Не удалось загрузить товары");
 		} finally {
 			setIsLoading(false);
 		}
@@ -53,6 +70,7 @@ export default function ProductsPage() {
 			? `http://127.0.0.1:8000/api/products/${editingProduct.id}/`
 			: 'http://127.0.0.1:8000/api/products/';
 		const method = editingProduct ? 'PUT' : 'POST';
+		const saveToast = toast.loading('Сохранение...');
 
 		try {
 			const res = await fetch(url, {
@@ -65,28 +83,45 @@ export default function ProductsPage() {
 			});
 
 			if (res.ok) {
+				toast.success(editingProduct ? 'Товар успешно обновлен!' : 'Новый товар добавлен!', { id: saveToast });
 				setIsModalOpen(false);
 				fetchProducts();
 			} else {
-				alert("Ошибка при сохранении");
+				toast.error("Ошибка при сохранении", { id: saveToast });
 			}
 		} catch (err) {
-			console.error(err);
+			toast.error("Ошибка сети", { id: saveToast });
 		}
 	};
 
-	const handleDelete = async (id: number) => {
-		if (!window.confirm('Точно удалить этот товар?')) return;
+	// Открываем модалку удаления
+	const handleDeleteClick = (product: any) => {
+		setProductToDelete(product);
+		setIsDeleteModalOpen(true);
+	};
+
+	// Подтверждаем удаление (вызывается из модалки)
+	const confirmDelete = async () => {
+		if (!productToDelete) return;
 
 		const token = localStorage.getItem('token');
+		const deleteToast = toast.loading('Удаление...');
+
 		try {
-			const res = await fetch(`http://127.0.0.1:8000/api/products/${id}/`, {
+			const res = await fetch(`http://127.0.0.1:8000/api/products/${productToDelete.id}/`, {
 				method: 'DELETE',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
-			if (res.ok) fetchProducts();
+
+			if (res.ok) {
+				toast.success('Товар успешно удален', { id: deleteToast });
+				setIsDeleteModalOpen(false);
+				fetchProducts();
+			} else {
+				toast.error("Ошибка при удалении", { id: deleteToast });
+			}
 		} catch (err) {
-			console.error("Ошибка удаления:", err);
+			toast.error("Ошибка сети", { id: deleteToast });
 		}
 	};
 
@@ -160,12 +195,14 @@ export default function ProductsPage() {
 													<button
 														onClick={() => openModal(item)}
 														className="p-2 bg-white text-slate-400 hover:text-primary hover:border-primary border border-slate-200 rounded-xl shadow-sm transition-colors"
+														title="Редактировать"
 													>
 														<Edit2 size={16} strokeWidth={2.5} />
 													</button>
 													<button
-														onClick={() => handleDelete(item.id)}
+														onClick={() => handleDeleteClick(item)}
 														className="p-2 bg-white text-slate-400 hover:text-red-500 hover:border-red-500 border border-slate-200 rounded-xl shadow-sm transition-colors"
+														title="Удалить"
 													>
 														<Trash2 size={16} strokeWidth={2.5} />
 													</button>
@@ -180,12 +217,21 @@ export default function ProductsPage() {
 				</div>
 			</Card>
 
-			{/* Вызов новой модалки */}
+			{/* Модалка редактирования/создания товара */}
 			<ProductModal
 				isOpen={isModalOpen}
 				onClose={() => setIsModalOpen(false)}
 				onSave={handleSaveProduct}
 				initialData={editingProduct}
+			/>
+
+			{/* Новая модалка подтверждения удаления */}
+			<ConfirmDeleteModal
+				isOpen={isDeleteModalOpen}
+				onClose={() => setIsDeleteModalOpen(false)}
+				onConfirm={confirmDelete}
+				title="Удаление товара"
+				itemName={productToDelete?.name || ''}
 			/>
 		</div>
 	);

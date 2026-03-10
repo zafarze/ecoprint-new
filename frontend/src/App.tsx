@@ -1,5 +1,5 @@
 // src/App.tsx
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import Layout from './components/Layout';
@@ -11,24 +11,42 @@ import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
 import ProductsPage from './pages/ProductsPage';
 
+// === ДОБАВЛЕННЫЕ ИМПОРТЫ ДЛЯ РАЗДЕЛА НАСТРОЕК ===
+import SettingsLayout from './settings/SettingsLayout';
+import CompanySettings from './settings/CompanySettings';
+import IntegrationsSettings from './settings/IntegrationsSettings';
+import NotificationSettings from './settings/NotificationSettings';
+import ProductManagement from './settings/ProductManagement';
+import UserManagement from './settings/UserManagement';
+
 import '@fortawesome/fontawesome-free/css/all.min.css';
+
+// === ЗАЩИТНИК МАРШРУТОВ (Protected Route) ===
+// Проверяет токен до того, как пустить пользователя к компонентам
+const RequireAuth = () => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    // Если токена нет, моментально перекидываем на логин, заменяя историю (replace)
+    return <Navigate to="/login" replace />;
+  }
+  return <Outlet />; // Если токен есть, рендерим вложенные маршруты
+};
 
 function App() {
   return (
     <>
-      {/* Глобальный компонент уведомлений - выпадает сверху по центру */}
       <Toaster
         position="top-center"
         reverseOrder={false}
         toastOptions={{
           duration: 3000,
           style: {
-            marginTop: '16px', // Отступ от верхнего края, чтобы не прилипало к хедеру
+            marginTop: '16px',
             background: '#ffffff',
             color: '#1e293b',
             fontWeight: '700',
             fontSize: '14px',
-            borderRadius: '100px', // Делаем "таблеткой" под стиль нового хедера
+            borderRadius: '100px',
             boxShadow: '0 10px 40px -10px rgba(0,0,0,0.15)',
             border: '1px solid #f1f5f9',
             padding: '12px 24px',
@@ -44,15 +62,29 @@ function App() {
 
       <BrowserRouter>
         <Routes>
+          {/* Публичный маршрут */}
           <Route path="/login" element={<LoginPage />} />
 
-          <Route path="/" element={<Layout />}>
-            <Route index element={<OrdersPage />} />
-            <Route path="archive" element={<ArchivePage />} />
-            <Route path="statistics" element={<StatisticsPage />} />
-            <Route path="settings/*" element={<SettingsPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="products" element={<ProductsPage />} />
+          {/* Защищенные маршруты обернуты в RequireAuth */}
+          <Route element={<RequireAuth />}>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<OrdersPage />} />
+              <Route path="archive" element={<ArchivePage />} />
+              <Route path="statistics" element={<StatisticsPage />} />
+              <Route path="products" element={<ProductsPage />} />
+
+              {/* === ПРАВИЛЬНЫЙ РОУТИНГ НАСТРОЕК === */}
+              <Route path="settings" element={<SettingsLayout />}>
+                <Route index element={<SettingsPage />} /> {/* Главная страница настроек */}
+                <Route path="company" element={<CompanySettings />} />
+                <Route path="integrations" element={<IntegrationsSettings />} />
+                <Route path="notifications" element={<NotificationSettings />} />
+                <Route path="products" element={<ProductManagement />} />
+                <Route path="users" element={<UserManagement />} />
+              </Route>
+
+              <Route path="profile" element={<ProfilePage />} />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>

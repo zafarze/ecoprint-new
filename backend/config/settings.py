@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt', # Добавили библиотеку для JWT токенов
     'corsheaders',
     
+    
     # Наше локальное приложение EcoPrint:
     'app',
 ]
@@ -133,6 +134,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization', # Самое важное!
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # --- НАСТРОЙКИ REST FRAMEWORK ---
 REST_FRAMEWORK = {

@@ -1,22 +1,72 @@
-import { useState } from 'react';
-import { Building2, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Building2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input, Label } from '../components/ui/Form';
 
 export default function CompanySettings() {
-	const [companyName, setCompanyName] = useState('EcoPrint');
-	const [address, setAddress] = useState('г. Душанбе, ул. Примерная 123');
-	const [phone, setPhone] = useState('+992 00 000 0000');
+	const [companyName, setCompanyName] = useState('');
+	const [address, setAddress] = useState('');
+	const [phone, setPhone] = useState('');
+	const [isLoading, setIsLoading] = useState(true);
+	const [isSaving, setIsSaving] = useState(false);
 
-	const handleSubmit = (e: React.FormEvent) => {
+	// Загружаем настройки при открытии страницы
+	useEffect(() => {
+		const fetchSettings = async () => {
+			const token = localStorage.getItem('token');
+			try {
+				const res = await fetch('http://127.0.0.1:8000/api/settings/company/', {
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				if (res.ok) {
+					const data = await res.json();
+					setCompanyName(data.company_name || '');
+					setAddress(data.address || '');
+					setPhone(data.phone || '');
+				}
+			} catch (error) {
+				console.error('Ошибка загрузки данных компании:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+		fetchSettings();
+	}, []);
+
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		console.log("Сохранение данных компании...", { companyName, address, phone });
+		setIsSaving(true);
+		const token = localStorage.getItem('token');
 
-		// Красивое всплывающее уведомление вместо старого alert!
-		toast.success("Данные компании успешно сохранены!");
+		try {
+			const res = await fetch('http://127.0.0.1:8000/api/settings/company/', {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					company_name: companyName,
+					address: address,
+					phone: phone
+				})
+			});
+
+			if (res.ok) {
+				toast.success("Данные компании успешно сохранены!");
+			} else {
+				toast.error("Ошибка при сохранении данных.");
+			}
+		} catch (error) {
+			toast.error("Ошибка соединения с сервером.");
+		} finally {
+			setIsSaving(false);
+		}
 	};
+
+	if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>;
 
 	return (
 		<div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4">
@@ -50,14 +100,12 @@ export default function CompanySettings() {
 						<Input
 							value={phone}
 							onChange={e => setPhone(e.target.value)}
-							placeholder="+992 XX XXX XXXX"
+							placeholder="+992 00 000 0000"
 						/>
 					</div>
 
-					<div className="pt-6 mt-6 border-t border-slate-100 flex justify-end">
-						<Button type="submit" icon={<Save size={18} />}>
-							Сохранить изменения
-						</Button>
+					<div className="pt-4 flex justify-end">
+						<Button type="submit" isLoading={isSaving}>Сохранить изменения</Button>
 					</div>
 				</form>
 			</Card>

@@ -1,4 +1,5 @@
 import os
+import gspread
 from datetime import date, timedelta
 from django.utils import timezone
 from django.conf import settings
@@ -8,21 +9,32 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.contrib.auth.models import User
 from .ai_service import ask_gemini
+from rest_framework.views import APIView
+from .models import CompanySettings, TelegramSettings
+from .serializers import CompanySettingsSerializer, TelegramSettingsSerializer
+
+from django.utils import timezone
+from datetime import timedelta
 
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Order, Item, Product
-from .serializers import OrderSerializer, ProductSerializer, UserSimpleSerializer, ItemSerializer, ItemWriteSerializer
+from .serializers import OrderSerializer, ProductSerializer, UserSimpleSerializer, ItemSerializer, ItemWriteSerializer, CustomTokenObtainPairSerializer
 from .telegram_bot import send_telegram_notification
 
-# ЗАКОММЕНТИРОВАНО: Пока мы не перенесли файл ai_service.py
-# from .ai_service import ask_gemini 
-
-# ЗАКОММЕНТИРОВАНО: Пока не установим библиотеку gspread
-# import gspread 
+# ==========================================
+# 0. АВТОРИЗАЦИЯ (JWT)
+# ==========================================
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Кастомное представление для авторизации.
+    Возвращает данные пользователя вместе с токеном.
+    """
+    serializer_class = CustomTokenObtainPairSerializer
 
 # ==========================================
 # 1. PERMISSIONS (ПРАВА ДОСТУПА)
@@ -38,19 +50,27 @@ class IsAdminOrCantDelete(BasePermission):
 # ==========================================
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
-    permission_classes = [IsAuthenticated, IsAdminOrCantDelete]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # 1. АВТО-АРХИВАЦИЯ (Senior trick)
+        # Находим заказы со статусом 'ready', которые обновились 2 или более дней назад
+        two_days_ago = timezone.now() - timedelta(days=2)
+        Order.objects.filter(
+            is_archived=False,
+            status='ready',
+            updated_at__lte=two_days_ago
+        ).update(is_archived=True)
+        # Примечание: update() сработает мгновенно на уровне базы данных (очень быстро)
+
+        # 2. Обычная логика выдачи заказов
         queryset = Order.objects.all()
-        is_archived = self.request.query_params.get('is_archived')
-        
-        if is_archived == 'true':
-            queryset = queryset.filter(items__is_archived=True)
-        elif is_archived == 'false':
-            queryset = queryset.filter(items__is_archived=False)
-        
-        queryset = queryset.annotate(earliest_deadline=Min('items__deadline'))
-        return queryset.distinct().order_by(F('earliest_deadline').asc(nulls_last=True), '-created_at')
+        is_archived = self.request.query_params.get('is_archived', None)
+        if is_archived is not None:
+            is_archived_bool = is_archived.lower() == 'true'
+            queryset = queryset.filter(is_archived=is_archived_bool)
+            
+        return queryset.prefetch_related('items__responsible_user')
 
     def get_serializer_context(self):
         context = super().get_serializer_context() 
@@ -93,13 +113,10 @@ class ItemViewSet(viewsets.ModelViewSet):
             return ItemWriteSerializer
         return ItemSerializer
 
-class ProductViewSet(viewsets.ModelViewSet): # Изменили на ModelViewSet!
+class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('name')
     serializer_class = ProductSerializer
-    
-    # Теперь требуем авторизацию для изменения товаров
     permission_classes = [permissions.IsAuthenticated] 
-    
     pagination_class = None 
     
     @method_decorator(never_cache)
@@ -123,9 +140,7 @@ def chat_with_ai(request):
     if not question:
         return Response({'error': 'Пустой вопрос'}, status=400)
 
-    # Теперь вызываем нашу реальную нейросеть!
     answer = ask_gemini(question)
-
     return Response({'answer': answer})
 
 @api_view(['GET'])
@@ -139,9 +154,8 @@ def statistics_data_view(request):
     start_date = today
     
     if period == 'month':
-        start_date = today - timedelta(days=29) # 30 дней включая сегодня
+        start_date = today - timedelta(days=29)
     elif period == 'year':
-        # Откатываемся на 11 месяцев назад
         start_month = today.month + 1
         start_year = today.year - 1
         if start_month > 12:
@@ -149,8 +163,8 @@ def statistics_data_view(request):
             start_year += 1
         start_date = date(start_year, start_month, 1)
     else: 
-        start_date = today - timedelta(days=6) # 7 дней для недели
-        period = 'week' # страховка
+        start_date = today - timedelta(days=6)
+        period = 'week'
 
     orders_in_period = Order.objects.filter(created_at__date__gte=start_date)
     total_orders = orders_in_period.count()
@@ -166,11 +180,8 @@ def statistics_data_view(request):
         'counts': [item['count'] for item in status_counts_query],
     }
 
-    # --- НОВАЯ ЛОГИКА ДЛЯ ГРАФИКА ДИНАМИКИ (Диаграмма с заливкой) ---
     dynamics_data = []
-    
     if period in ['week', 'month']:
-        # Группируем по дням
         daily_counts = orders_in_period.annotate(date=TruncDate('created_at')).values('date').annotate(count=Count('id'))
         counts_dict = {item['date']: item['count'] for item in daily_counts}
         
@@ -181,17 +192,15 @@ def statistics_data_view(request):
                 weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
                 name = weekdays[d.weekday()]
             else:
-                name = d.strftime('%d.%m') # Для месяца формат 08.03
+                name = d.strftime('%d.%m')
                 
             dynamics_data.append({
                 'name': name,
-                'orders': counts_dict.get(d, 0) # 0, если в этот день не было заказов
+                'orders': counts_dict.get(d, 0)
             })
             
     elif period == 'year':
-        # Группируем по месяцам
         monthly_counts = orders_in_period.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id'))
-        # Django может вернуть datetime, поэтому берем .date()
         month_dict = {item['month'].date() if hasattr(item['month'], 'date') else item['month']: item['count'] for item in monthly_counts}
         
         for i in range(11, -1, -1):
@@ -204,7 +213,7 @@ def statistics_data_view(request):
             months_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
             
             dynamics_data.append({
-                'name': f"{months_ru[m-1]}", # Например "Мар"
+                'name': f"{months_ru[m-1]}",
                 'orders': month_dict.get(target_month, 0)
             })
 
@@ -214,10 +223,92 @@ def statistics_data_view(request):
         'created_today': created_today,
         'top_product': top_product_name,
         'status_counts': status_data,
-        'dynamics_data': dynamics_data, # Возвращаем готовый массив для графика
+        'dynamics_data': dynamics_data,
     })
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def sync_to_google_sheets(request):
-    return Response({'error': 'Библиотека gspread не установлена. Заглушка активна.'}, status=500)
+    try:
+        service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
+        if not os.path.exists(service_account_path):
+            return Response({'error': 'Файл service_account.json не найден!'}, status=400)
+
+        gc = gspread.service_account(filename=service_account_path)
+        sheet_id = os.environ.get('GOOGLE_SHEET_ID')
+        
+        if not sheet_id:
+             sheet_name = os.environ.get('GOOGLE_SHEET_NAME', 'EcoPrint Orders')
+             try:
+                 sh = gc.open(sheet_name)
+             except gspread.SpreadsheetNotFound:
+                 return Response({'error': f'Таблица "{sheet_name}" не найдена.'}, status=404)
+        else:
+             sh = gc.open_by_key(sheet_id)
+        
+        worksheet = sh.sheet1 
+        cutoff_date = timezone.now() - timedelta(days=90)
+        orders = Order.objects.filter(created_at__gte=cutoff_date).prefetch_related('items__responsible_user').order_by('-created_at')
+        
+        data = [['ID', 'Клиент', 'Дата', 'Статус заказа', 'Товар', 'Кол-во', 'Дедлайн', 'Статус товара', 'Ответственный', 'Комментарий']]
+
+        for order in orders:
+            created_date = order.created_at.strftime("%d.%m.%Y %H:%M")
+            if not order.items.exists():
+                data.append([order.id, order.client, created_date, order.get_status_display(), "-", "-", "-", "-", "-", "-"])
+                continue
+
+            for item in order.items.all():
+                resp_user = "Нет"
+                if item.responsible_user:
+                    resp_user = item.responsible_user.first_name or item.responsible_user.username
+
+                deadline = item.deadline.strftime("%d.%m.%Y") if item.deadline else "-"
+                row = [order.id, order.client, created_date, order.get_status_display(), item.name, item.quantity, deadline, item.get_status_display(), resp_user, item.comment]
+                data.append(row)
+
+        worksheet.clear()
+        worksheet.update(data)
+
+        return Response({
+            'status': 'success', 
+            'message': f'Выгружены заказы за 90 дней. Строк: {len(data)-1}'
+        })
+
+    except Exception as e:
+        print(f"Google Sheet Error: {e}")
+        return Response({'error': str(e)}, status=500)
+
+# ==========================================
+# 4. НАСТРОЙКИ КОМПАНИИ И ИНТЕГРАЦИЙ
+# ==========================================
+class CompanySettingsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # get_or_create гарантирует, что объект с id=1 всегда существует
+        obj, _ = CompanySettings.objects.get_or_create(id=1)
+        return Response(CompanySettingsSerializer(obj).data)
+
+    def put(self, request):
+        obj, _ = CompanySettings.objects.get_or_create(id=1)
+        serializer = CompanySettingsSerializer(obj, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+
+class TelegramSettingsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        obj, _ = TelegramSettings.objects.get_or_create(id=1)
+        return Response(TelegramSettingsSerializer(obj).data)
+
+    def put(self, request):
+        obj, _ = TelegramSettings.objects.get_or_create(id=1)
+        serializer = TelegramSettingsSerializer(obj, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
