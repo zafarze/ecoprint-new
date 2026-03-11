@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, X, Send, Bot, User } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Trash2 } from 'lucide-react'; // Добавили Trash2
 
 interface Message {
 	id: number;
@@ -8,20 +8,36 @@ interface Message {
 	sender: 'user' | 'bot';
 }
 
+const INITIAL_MESSAGE: Message = {
+	id: 1,
+	text: 'Привет! Я твой ИИ-помощник EcoPrint. Я вижу все заказы в базе. Спроси меня: **"Сколько заказов в работе?"** 🤖',
+	sender: 'bot'
+};
+
 export default function AIChatWidget() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [inputText, setInputText] = useState('');
 	const [isTyping, setIsTyping] = useState(false);
 
-	const [messages, setMessages] = useState<Message[]>([
-		{
-			id: 1,
-			text: 'Привет! Я твой ИИ-помощник EcoPrint. Я вижу все заказы в базе. Спроси меня: **"Сколько заказов в работе?"** 🤖',
-			sender: 'bot'
+	// 1. УМНАЯ ЗАГРУЗКА: При открытии страницы пытаемся достать историю из localStorage
+	const [messages, setMessages] = useState<Message[]>(() => {
+		const saved = localStorage.getItem('eco_ai_chat_history');
+		if (saved) {
+			try {
+				return JSON.parse(saved);
+			} catch (e) {
+				console.error('Ошибка парсинга истории чата', e);
+			}
 		}
-	]);
+		return [INITIAL_MESSAGE];
+	});
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
+
+	// 2. АВТОСОХРАНЕНИЕ: Каждый раз, когда массив сообщений меняется, сохраняем его в localStorage
+	useEffect(() => {
+		localStorage.setItem('eco_ai_chat_history', JSON.stringify(messages));
+	}, [messages]);
 
 	// Автопрокрутка вниз
 	useEffect(() => {
@@ -34,13 +50,13 @@ export default function AIChatWidget() {
 
 		const userText = inputText.trim();
 
-		// 1. Добавляем сообщение пользователя в чат
+		// Сообщение пользователя
 		const newUserMsg: Message = { id: Date.now(), text: userText, sender: 'user' };
 		setMessages(prev => [...prev, newUserMsg]);
 		setInputText('');
 		setIsTyping(true);
 
-		// 2. Отправляем запрос на наш Django Backend
+		// Отправка запроса на бэкенд
 		try {
 			const token = localStorage.getItem('token');
 			const baseUrl = import.meta.env.VITE_API_URL;
@@ -57,7 +73,6 @@ export default function AIChatWidget() {
 			const data = await res.json();
 
 			if (res.ok) {
-				// Успешный ответ от ИИ
 				const newBotMsg: Message = {
 					id: Date.now(),
 					text: data.answer || 'Извините, я не понял ответ.',
@@ -65,7 +80,6 @@ export default function AIChatWidget() {
 				};
 				setMessages(prev => [...prev, newBotMsg]);
 			} else {
-				// Если бэкенд вернул ошибку
 				const errorMsg: Message = {
 					id: Date.now(),
 					text: `**Ошибка:** ${data.error || 'Что-то пошло не так на сервере 😔'}`,
@@ -74,7 +88,6 @@ export default function AIChatWidget() {
 				setMessages(prev => [...prev, errorMsg]);
 			}
 		} catch (error) {
-			// Ошибка сети (например, сервер упал)
 			const errorMsg: Message = {
 				id: Date.now(),
 				text: '**Сбой сети.** Проверьте подключение к серверу. 📡',
@@ -82,11 +95,17 @@ export default function AIChatWidget() {
 			};
 			setMessages(prev => [...prev, errorMsg]);
 		} finally {
-			setIsTyping(false); // Выключаем анимацию печати в любом случае
+			setIsTyping(false);
 		}
 	};
 
-	// Безопасный парсер жирного шрифта (Markdown-like)
+	// Очистка истории чата
+	const clearHistory = () => {
+		setMessages([INITIAL_MESSAGE]);
+		localStorage.removeItem('eco_ai_chat_history');
+	};
+
+	// Безопасный парсер жирного шрифта
 	const renderMessageText = (text: string) => {
 		const parts = text.split(/(\*\*.*?\*\*)/g);
 		return parts.map((part, i) => {
@@ -99,7 +118,6 @@ export default function AIChatWidget() {
 
 	return (
 		<div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
-
 			{/* Окно чата */}
 			<AnimatePresence>
 				{isOpen && (
@@ -124,12 +142,22 @@ export default function AIChatWidget() {
 									</p>
 								</div>
 							</div>
-							<button
-								onClick={() => setIsOpen(false)}
-								className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
-							>
-								<X size={20} />
-							</button>
+							<div className="flex items-center gap-1">
+								{/* Кнопка очистки истории */}
+								<button
+									onClick={clearHistory}
+									className="p-2 bg-white/10 hover:bg-white/20 hover:text-red-200 rounded-xl transition-colors"
+									title="Очистить историю"
+								>
+									<Trash2 size={18} />
+								</button>
+								<button
+									onClick={() => setIsOpen(false)}
+									className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
+								>
+									<X size={20} />
+								</button>
+							</div>
 						</div>
 
 						{/* Область сообщений */}
@@ -154,7 +182,6 @@ export default function AIChatWidget() {
 								</motion.div>
 							))}
 
-							{/* Анимация "ИИ печатает..." */}
 							{isTyping && (
 								<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 max-w-[85%]">
 									<div className="w-8 h-8 rounded-full bg-gradient-eco text-white flex items-center justify-center shrink-0 mt-1 shadow-sm">
