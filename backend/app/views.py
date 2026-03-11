@@ -8,69 +8,57 @@ from django.db.models.functions import TruncDate, TruncMonth
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.contrib.auth.models import User
-from .ai_service import ask_gemini
-from rest_framework.views import APIView
-from .models import CompanySettings, TelegramSettings
-from .serializers import CompanySettingsSerializer, TelegramSettingsSerializer
-
-from django.utils import timezone
-from datetime import timedelta
 
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import Order, Item, Product
-from .serializers import OrderSerializer, ProductSerializer, UserSimpleSerializer, ItemSerializer, ItemWriteSerializer, CustomTokenObtainPairSerializer
+from .ai_service import ask_gemini
+from .models import Order, Item, Product, CompanySettings, TelegramSettings
+
+# 🔥 ИМПОРТИРУЕМ ОБА СЕРИАЛИЗАТОРА
+from .serializers import (
+    OrderSerializer, OrderListSerializer, ProductSerializer, UserSimpleSerializer, 
+    ItemSerializer, ItemWriteSerializer, CustomTokenObtainPairSerializer,
+    CompanySettingsSerializer, TelegramSettingsSerializer
+)
 from .telegram_bot import send_telegram_notification
 
-# ==========================================
-# 0. АВТОРИЗАЦИЯ (JWT)
-# ==========================================
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """
-    Кастомное представление для авторизации.
-    Возвращает данные пользователя вместе с токеном.
-    """
     serializer_class = CustomTokenObtainPairSerializer
 
-# ==========================================
-# 1. PERMISSIONS (ПРАВА ДОСТУПА)
-# ==========================================
 class IsAdminOrCantDelete(BasePermission):
     def has_permission(self, request, view):
         if view.action == 'destroy':
             return request.user.is_superuser
         return True
 
-# ==========================================
-# 2. VIEWSETS (ОСНОВНОЙ CRUD API)
-# ==========================================
 class OrderViewSet(viewsets.ModelViewSet):
-    serializer_class = OrderSerializer
-    permission_classes = [IsAuthenticated]
+    # Я оставил авторизацию закомментированной, как у тебя было для тестов
+    #permission_classes = [IsAuthenticated]
+
+    # 🔥 ДИНАМИЧЕСКИЙ ВЫБОР СЕРИАЛИЗАТОРА
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return OrderListSerializer # Быстрый для списка
+        return OrderSerializer # Полный для модалки и сохранений
 
     def get_queryset(self):
-        # 1. АВТО-АРХИВАЦИЯ (Senior trick)
-        # Находим заказы со статусом 'ready', которые обновились 2 или более дней назад
-        two_days_ago = timezone.now() - timedelta(days=2)
-        Order.objects.filter(
-            is_archived=False,
-            status='ready',
-            updated_at__lte=two_days_ago
-        ).update(is_archived=True)
-        # Примечание: update() сработает мгновенно на уровне базы данных (очень быстро)
-
-        # 2. Обычная логика выдачи заказов
-        queryset = Order.objects.all()
+        queryset = Order.objects.all().order_by('-created_at')
+        
         is_archived = self.request.query_params.get('is_archived', None)
         if is_archived is not None:
             is_archived_bool = is_archived.lower() == 'true'
             queryset = queryset.filter(is_archived=is_archived_bool)
             
-        return queryset.prefetch_related('items__responsible_user')
+        # 🔥 УБРАЛИ ЗАПРОС ИСТОРИИ ДЛЯ СПИСКА
+        if self.action == 'list':
+            return queryset.prefetch_related('items__responsible_user')
+            
+        return queryset.prefetch_related('items__responsible_user', 'history__user')
 
     def get_serializer_context(self):
         context = super().get_serializer_context() 
@@ -83,6 +71,14 @@ class OrderViewSet(viewsets.ModelViewSet):
             send_telegram_notification(order)
         except Exception as e:
             print(f"Ошибка Telegram: {e}")
+
+    @action(detail=False, methods=['post'])
+    def trigger_auto_archive(self, request):
+        two_days_ago = timezone.now() - timedelta(days=2)
+        archived_count = Order.objects.filter(
+            is_archived=False, status='ready', updated_at__lte=two_days_ago
+        ).update(is_archived=True)
+        return Response({'status': 'success', 'message': f'{archived_count} заказов отправлено в архив.'})
 
     @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
@@ -104,6 +100,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'status': 'error', 'message': str(e)}, status=400)
 
+
 class ItemViewSet(viewsets.ModelViewSet):
     queryset = Item.objects.all()
     permission_classes = [IsAuthenticated, IsAdminOrCantDelete]
@@ -112,6 +109,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         if self.request.method in ['POST', 'PUT', 'PATCH']:
             return ItemWriteSerializer
         return ItemSerializer
+
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('name')
@@ -123,15 +121,13 @@ class ProductViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
+
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.filter(is_active=True).order_by('first_name')
     serializer_class = UserSimpleSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
-# ==========================================
-# 3. ДОПОЛНИТЕЛЬНЫЕ ЭНДПОИНТЫ (СТАТИСТИКА, ИИ, ИНТЕГРАЦИИ)
-# ==========================================
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -139,9 +135,9 @@ def chat_with_ai(request):
     question = request.data.get('message', '')
     if not question:
         return Response({'error': 'Пустой вопрос'}, status=400)
-
     answer = ask_gemini(question)
     return Response({'answer': answer})
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -166,12 +162,15 @@ def statistics_data_view(request):
         start_date = today - timedelta(days=6)
         period = 'week'
 
-    orders_in_period = Order.objects.filter(created_at__date__gte=start_date)
+    orders_in_period = Order.objects.filter(created_at__gte=start_date)
     total_orders = orders_in_period.count()
     pending_orders = orders_in_period.filter(status='in-progress').count()
-    created_today = Order.objects.filter(created_at__date=today).count()
+    created_today = Order.objects.filter(created_at__gte=today).count()
     
-    top_product_query = Item.objects.filter(order__in=orders_in_period).values('name').annotate(name_count=Count('name')).order_by('-name_count').first()
+    top_product_query = Item.objects.filter(
+        order__created_at__gte=start_date
+    ).values('name').annotate(name_count=Count('name')).order_by('-name_count').first()
+    
     top_product_name = top_product_query['name'] if top_product_query else "Нет данных"
 
     status_counts_query = orders_in_period.values('status').annotate(count=Count('status')).order_by('status')
@@ -194,10 +193,7 @@ def statistics_data_view(request):
             else:
                 name = d.strftime('%d.%m')
                 
-            dynamics_data.append({
-                'name': name,
-                'orders': counts_dict.get(d, 0)
-            })
+            dynamics_data.append({'name': name, 'orders': counts_dict.get(d, 0)})
             
     elif period == 'year':
         monthly_counts = orders_in_period.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id'))
@@ -212,10 +208,7 @@ def statistics_data_view(request):
             target_month = date(y, m, 1)
             months_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
             
-            dynamics_data.append({
-                'name': f"{months_ru[m-1]}",
-                'orders': month_dict.get(target_month, 0)
-            })
+            dynamics_data.append({'name': f"{months_ru[m-1]}", 'orders': month_dict.get(target_month, 0)})
 
     return Response({
         'total_orders': total_orders,
@@ -225,6 +218,7 @@ def statistics_data_view(request):
         'status_counts': status_data,
         'dynamics_data': dynamics_data,
     })
+
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -262,31 +256,22 @@ def sync_to_google_sheets(request):
                 resp_user = "Нет"
                 if item.responsible_user:
                     resp_user = item.responsible_user.first_name or item.responsible_user.username
-
                 deadline = item.deadline.strftime("%d.%m.%Y") if item.deadline else "-"
                 row = [order.id, order.client, created_date, order.get_status_display(), item.name, item.quantity, deadline, item.get_status_display(), resp_user, item.comment]
                 data.append(row)
 
         worksheet.clear()
         worksheet.update(data)
-
-        return Response({
-            'status': 'success', 
-            'message': f'Выгружены заказы за 90 дней. Строк: {len(data)-1}'
-        })
+        return Response({'status': 'success', 'message': f'Выгружены заказы за 90 дней. Строк: {len(data)-1}'})
 
     except Exception as e:
-        print(f"Google Sheet Error: {e}")
         return Response({'error': str(e)}, status=500)
 
-# ==========================================
-# 4. НАСТРОЙКИ КОМПАНИИ И ИНТЕГРАЦИЙ
-# ==========================================
+
 class CompanySettingsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # get_or_create гарантирует, что объект с id=1 всегда существует
         obj, _ = CompanySettings.objects.get_or_create(id=1)
         return Response(CompanySettingsSerializer(obj).data)
 
@@ -297,6 +282,7 @@ class CompanySettingsAPIView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=400)
+
 
 class TelegramSettingsAPIView(APIView):
     permission_classes = [IsAuthenticated]

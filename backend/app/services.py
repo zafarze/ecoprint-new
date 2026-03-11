@@ -2,12 +2,26 @@ from django.db import transaction
 from django.contrib.auth.models import User
 from typing import List, Dict, Any
 
-from .models import Order, Item, OrderHistory
+# ИСПРАВЛЕНО: Добавили импорт Product
+from .models import Order, Item, OrderHistory, Product
 
 class OrderService:
     @staticmethod
     def _log_history(order: Order, user: User, message: str) -> None:
         OrderHistory.objects.create(order=order, user=user, message=message)
+
+    # 🔥 НОВЫЙ МЕТОД: Логика автосоздания шаблонов перенесена сюда из моделей
+    @classmethod
+    def _ensure_product_exists(cls, name: str) -> None:
+        if not name:
+            return
+        clean_name = name.strip()
+        if clean_name and not Product.objects.filter(name__iexact=clean_name).exists():
+            Product.objects.create(
+                name=clean_name,
+                category='polygraphy',  # Категория по умолчанию
+                icon='fas fa-box-open'  # Иконка по умолчанию
+            )
 
     @classmethod
     def update_order(cls, order: Order, validated_data: Dict[str, Any], user: User) -> Order:
@@ -58,6 +72,9 @@ class OrderService:
                 new_item = Item.objects.create(order=order, **item_data)
                 keep_ids.append(new_item.id)
                 cls._log_history(order, user, f"Добавил товар: {new_item.name}")
+                
+                # 🔥 ИСПРАВЛЕНО: Проверяем и создаем шаблон при добавлении нового товара
+                cls._ensure_product_exists(new_item.name)
 
         items_to_delete = order.items.filter(is_archived=False).exclude(id__in=keep_ids)
         for del_item in items_to_delete:
@@ -67,6 +84,12 @@ class OrderService:
     @classmethod
     def _update_single_item(cls, order: Order, item: Item, new_data: Dict[str, Any], user: User) -> None:
         changes = []
+        
+        # 🔥 ИСПРАВЛЕНО: Проверяем смену названия и тоже обновляем шаблон, если нужно
+        if 'name' in new_data and item.name != new_data['name']:
+            changes.append(f"название '{item.name}' -> '{new_data['name']}'")
+            cls._ensure_product_exists(new_data['name'])
+            
         if 'status' in new_data and item.status != new_data['status']:
             changes.append(f"статус '{item.name}' ({item.status} -> {new_data['status']})")
         if 'quantity' in new_data and item.quantity != new_data['quantity']:

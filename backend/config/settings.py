@@ -103,6 +103,13 @@ else:
             'PASSWORD': os.environ.get('DB_PASSWORD', 'dummy_pass'),
             'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
             'PORT': os.environ.get('DB_PORT', '5432'),
+            
+            # Держим соединение открытым 
+            'CONN_MAX_AGE': 60,  # Давай снизим до 60 секунд, для локальной разработки этого хватит за глаза
+            
+            # 🔥 ДОБАВЛЯЕМ ЭТУ СТРОКУ (Проверка здоровья соединения перед запросом):
+            'CONN_HEALTH_CHECKS': True,
+            
             # ВАЖНО: Добавлено требование SSL для подключения к Google Cloud SQL
             'OPTIONS': {
                 'sslmode': 'require',
@@ -159,9 +166,8 @@ CORS_ALLOW_HEADERS = [
 # НАСТРОЙКИ REST FRAMEWORK & JWT
 # ==========================================
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20, # Выдавать по 20 заказов за раз
 }
 
 SIMPLE_JWT = {

@@ -41,10 +41,11 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 	useEffect(() => {
 		const loadData = async () => {
 			const token = localStorage.getItem('token');
+			const baseUrl = import.meta.env.VITE_API_URL; // Берем URL из окружения!
 			try {
 				const [resProd, resUsers] = await Promise.all([
-					fetch('http://127.0.0.1:8000/api/products/', { headers: { 'Authorization': `Bearer ${token}` } }),
-					fetch('http://127.0.0.1:8000/api/users/', { headers: { 'Authorization': `Bearer ${token}` } })
+					fetch(`${baseUrl}/api/products/`, { headers: { 'Authorization': `Bearer ${token}` } }),
+					fetch(`${baseUrl}/api/users/`, { headers: { 'Authorization': `Bearer ${token}` } })
 				]);
 				if (resProd.ok) setProducts(await resProd.json());
 				if (resUsers.ok) setUsers(await resUsers.json());

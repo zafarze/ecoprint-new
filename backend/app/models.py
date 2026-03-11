@@ -39,7 +39,8 @@ class Order(models.Model):
         return f"Заказ №{self.id} от {self.client}"
 
     def update_status(self):
-        statuses = list(self.items.values_list('status', flat=True))
+        # ИСПРАВЛЕНО: Используем .all(), чтобы работал prefetch_related и не было N+1 запросов
+        statuses = [item.status for item in self.items.all()]
         
         old_status = self.status
         new_status = 'not-ready'
@@ -56,8 +57,6 @@ class Order(models.Model):
             
         if old_status != new_status:
             self.status = new_status
-            # ВАЖНО: Добавили 'updated_at' в update_fields, 
-            # чтобы время обновления точно зафиксировалось при смене статуса
             self.save(update_fields=['status', 'updated_at'])
 
 # === Модель Товара в Заказе ===
@@ -120,26 +119,8 @@ class Item(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.quantity} шт.)"
-
-    def save(self, *args, **kwargs):
-        # Если у товара есть название
-        if self.name:
-            clean_name = self.name.strip()
-            
-            # Импортируем Product тут, чтобы не было ошибки порядка классов в файле
-            from .models import Product 
-            
-            # Проверяем, есть ли уже такой товар (name__iexact ищет без учета регистра, 
-            # чтобы "Визитки" и "визитки" не создавали дубликатов)
-            if not Product.objects.filter(name__iexact=clean_name).exists():
-                Product.objects.create(
-                    name=clean_name,
-                    category='polygraphy',  # Категория по умолчанию (Полиграфия)
-                    icon='fas fa-box-open'  # Иконка по умолчанию
-                )
-                
-        # Обязательно вызываем стандартное сохранение
-        super().save(*args, **kwargs)
+        
+    # ИСПРАВЛЕНО: Метод save() удален. Создание новых Product теперь должно быть в services.py
 
 # === Модель Профиля ===
 class Profile(models.Model):
@@ -176,7 +157,8 @@ class CompanySettings(models.Model):
 
     def save(self, *args, **kwargs):
         self.pk = 1 
-        super(CompanySettings, self).save(*args, **kwargs)
+        # ИСПРАВЛЕНО: Используем современный синтаксис super()
+        super().save(*args, **kwargs)
     
     @classmethod
     def load(cls):
@@ -197,7 +179,8 @@ class TelegramSettings(models.Model):
 
     def save(self, *args, **kwargs):
         self.pk = 1 
-        super(TelegramSettings, self).save(*args, **kwargs)
+        # ИСПРАВЛЕНО: Используем современный синтаксис super()
+        super().save(*args, **kwargs)
     
     @classmethod
     def load(cls):
