@@ -21,6 +21,9 @@ urlpatterns = [
     # ==========================================
     # КАСТОМНЫЕ ПУТИ (обязательно ДО роутера)
     # ==========================================
+    # 🔥 НОВЫЙ ПУТЬ ДЛЯ СТАТИСТИКИ ХЕДЕРА
+    path('header-stats/', views.header_stats, name='app-header-stats'),
+    
     path('statistics-data/', views.statistics_data_view, name='app-statistics-data'),
     path('sync-sheets/', views.sync_to_google_sheets, name='app-sync-sheets'),
     path('ai-chat/', views.chat_with_ai, name='app-ai-chat'),

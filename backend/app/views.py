@@ -111,6 +111,13 @@ class ItemViewSet(viewsets.ModelViewSet):
             return ItemWriteSerializer
         return ItemSerializer
 
+    # 🔥 ДОБАВЛЯЕМ ЭТОТ МЕТОД:
+    def perform_update(self, serializer):
+        item = serializer.save()
+        # Принудительно дергаем обновление статуса родительского заказа
+        if hasattr(item.order, 'update_status'):
+            item.order.update_status()
+
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('name')
@@ -299,3 +306,22 @@ class TelegramSettingsAPIView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=400)
+
+
+@api_view(['GET'])
+# @permission_classes([IsAuthenticated]) # Закомментировано для тестов
+def header_stats(request):
+    today = timezone.now().date()
+    tomorrow = today + timedelta(days=1)
+
+    # Ищем только активные заказы (не выданы и не в архиве)
+    active_orders = Order.objects.filter(is_archived=False, is_received=False)
+    
+    # Считаем уникальные заказы, у которых есть товары с нужным дедлайном
+    today_count = active_orders.filter(items__deadline=today).distinct().count()
+    tomorrow_count = active_orders.filter(items__deadline=tomorrow).distinct().count()
+
+    return Response({
+        'today': today_count,
+        'tomorrow': tomorrow_count
+    })
