@@ -19,6 +19,11 @@ DEBUG = os.environ.get('DEBUG') == 'True'
 # Разрешаем запросы с любых IP (нужно для облака)
 ALLOWED_HOSTS = ['*'] 
 
+# ДОБАВЛЕНО: Разрешаем CSRF-запросы с домена Cloud Run (исправляет ошибку 403)
+CSRF_TRUSTED_ORIGINS = [
+    'https://ecoprint-api-789088295892.europe-west3.run.app',
+]
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -98,6 +103,10 @@ else:
             'PASSWORD': os.environ.get('DB_PASSWORD', 'dummy_pass'),
             'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
             'PORT': os.environ.get('DB_PORT', '5432'),
+            # ВАЖНО: Добавлено требование SSL для подключения к Google Cloud SQL
+            'OPTIONS': {
+                'sslmode': 'require',
+            },
         }
     }
 
