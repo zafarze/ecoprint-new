@@ -43,10 +43,16 @@ export default function OrdersPage() {
 		const token = localStorage.getItem('token');
 		if (!token) return;
 		try {
-			// ИЗМЕНЕНО
-			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/?is_archived=false`, { headers: { 'Authorization': `Bearer ${token}` } });
-			if (res.ok) setOrders(await res.json());
-		} catch (err) { }
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/?is_archived=false`, {
+				headers: { 'Authorization': `Bearer ${token}` }
+			});
+			if (res.ok) {
+				const data = await res.json();
+				setOrders(data);
+			}
+		} catch (err) {
+			console.error("Ошибка при фоновой загрузке заказов:", err);
+		}
 	};
 
 	const loadOrders = async () => {
@@ -57,6 +63,11 @@ export default function OrdersPage() {
 		setIsLoading(false);
 	};
 
+	// Загрузка данных при монтировании компонента
+	useEffect(() => {
+		loadOrders();
+	}, []);
+
 	// === 2. ДЕЙСТВИЯ ===
 	const handleToggleItemStatus = async (item: any, orderId: number) => {
 		const nextStatusMap: Record<string, string> = { 'not-ready': 'in-progress', 'in-progress': 'ready', 'ready': 'not-ready' };
@@ -65,14 +76,16 @@ export default function OrdersPage() {
 		setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: o.items.map((i: any) => i.id === item.id ? { ...i, status: newStatus } : i) } : o));
 		try {
 			const token = localStorage.getItem('token');
-			// ИЗМЕНЕНО
 			await fetch(`${import.meta.env.VITE_API_URL}/api/items/${item.id}/`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
 				body: JSON.stringify({ status: newStatus })
 			});
 			fetchOrdersSilently();
-		} catch (e) { toast.error('Ошибка изменения статуса'); loadOrders(); }
+		} catch (e) {
+			toast.error('Ошибка изменения статуса');
+			loadOrders();
+		}
 	};
 
 	const handleToggleReceived = async (order: any) => {
@@ -80,40 +93,69 @@ export default function OrdersPage() {
 		setOrders(prev => prev.map(o => o.id === order.id ? { ...o, is_received: newVal } : o));
 		try {
 			const token = localStorage.getItem('token');
-			// ИЗМЕНЕНО
 			await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${order.id}/`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
 				body: JSON.stringify({ is_received: newVal })
 			});
 			toast.success(newVal ? 'Заказ выдан!' : 'Отметка о выдаче снята');
-		} catch (e) { toast.error('Ошибка сети'); loadOrders(); }
+		} catch (e) {
+			toast.error('Ошибка сети');
+			loadOrders();
+		}
 	};
 
 	const handleSaveOrder = async (orderData: any) => {
-		// ИЗМЕНЕНО
 		const url = editingOrder ? `${import.meta.env.VITE_API_URL}/api/orders/${editingOrder.id}/` : `${import.meta.env.VITE_API_URL}/api/orders/`;
 		const method = editingOrder ? 'PUT' : 'POST';
 		const token = localStorage.getItem('token');
 		const saveToast = toast.loading('Сохранение...');
 		try {
-			const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(orderData) });
-			if (res.ok) { toast.success('Успешно!', { id: saveToast }); setIsModalOpen(false); loadOrders(); }
-			else { toast.error('Ошибка сохранения', { id: saveToast }); }
-		} catch (e) { toast.error('Ошибка сети', { id: saveToast }); }
+			const res = await fetch(url, {
+				method,
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+				body: JSON.stringify(orderData)
+			});
+			if (res.ok) {
+				toast.success('Успешно!', { id: saveToast });
+				setIsModalOpen(false);
+				loadOrders();
+			} else {
+				toast.error('Ошибка сохранения', { id: saveToast });
+			}
+		} catch (e) {
+			toast.error('Ошибка сети', { id: saveToast });
+		}
 	};
 
 	const handleArchiveOrder = async (orderId: number) => {
 		const token = localStorage.getItem('token');
-		// ИЗМЕНЕНО
-		try { await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderId}/archive/`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }); toast.success('В архиве'); loadOrders(); } catch (e) { }
+		try {
+			await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderId}/archive/`, {
+				method: 'POST',
+				headers: { 'Authorization': `Bearer ${token}` }
+			});
+			toast.success('В архиве');
+			loadOrders();
+		} catch (e) {
+			toast.error('Ошибка при архивации');
+		}
 	};
 
 	const confirmDelete = async () => {
 		if (!orderToDelete) return;
 		const token = localStorage.getItem('token');
-		// ИЗМЕНЕНО
-		try { await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderToDelete.id}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); toast.success('Удалено'); setIsDeleteModalOpen(false); loadOrders(); } catch (e) { }
+		try {
+			await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderToDelete.id}/`, {
+				method: 'DELETE',
+				headers: { 'Authorization': `Bearer ${token}` }
+			});
+			toast.success('Удалено');
+			setIsDeleteModalOpen(false);
+			loadOrders();
+		} catch (e) {
+			toast.error('Ошибка при удалении');
+		}
 	};
 
 	// === ФИЛЬТРЫ И УТИЛИТЫ ===
@@ -129,13 +171,11 @@ export default function OrdersPage() {
 		return 'text-slate-600';
 	};
 
-	// ФОРМАТИРОВАНИЕ ДАТЫ СОЗДАНИЯ (ИСПРАВЛЕНИЕ INVALID DATE)
 	const formatCreationDate = (dateStr: string) => {
 		if (!dateStr) return '—';
 		return new Date(dateStr).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 	};
 
-	// КОПИРОВАНИЕ ИМЕНИ В БУФЕР
 	const copyToClipboard = (text: string) => {
 		navigator.clipboard.writeText(text);
 		toast.success('Имя клиента скопировано!');
@@ -184,7 +224,6 @@ export default function OrdersPage() {
 					<table className="w-full text-left border-collapse min-w-[1100px]">
 						<thead>
 							<tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-xs uppercase font-black tracking-wider">
-								{/* ИЗМЕНИЛИ ШИРИНУ КОЛОНОК */}
 								<th className="px-6 py-5 w-20">№</th>
 								<th className="px-6 py-5 w-48">Клиент</th>
 								<th className="px-6 py-5 min-w-[450px]">Товары (Интерактивные)</th>
@@ -205,7 +244,6 @@ export default function OrdersPage() {
 											<div className="text-[11px] font-bold text-slate-400 mt-1">ID:{order.id}</div>
 										</td>
 
-										{/* ИНТЕРАКТИВНЫЙ КЛИЕНТ (КОПИРОВАНИЕ И ЗВОНОК) */}
 										<td className="px-6 py-6 align-top">
 											<div
 												onClick={() => copyToClipboard(order.client)}
@@ -247,7 +285,6 @@ export default function OrdersPage() {
 																	<div className="font-black text-sm tracking-tight">{item.name} <span className="text-slate-500 font-medium ml-1">x{item.quantity}</span></div>
 
 																	<div className="flex flex-col text-[10px] font-bold ml-1 sm:ml-2 border-l border-slate-200 pl-3.5 space-y-0.5">
-																		{/* ИСПРАВЛЕННАЯ ДАТА СОЗДАНИЯ (Берем из самого заказа) */}
 																		<div className="flex items-center gap-1.5 text-slate-500"><PlayCircle size={12} /> {formatCreationDate(order.created_at)}</div>
 																		<div className={`flex items-center gap-1.5 ${getDeadlineStyles(item.deadline)}`}><Flag size={12} /> {item.deadline ? new Date(item.deadline).toLocaleDateString() : '—'}</div>
 																	</div>

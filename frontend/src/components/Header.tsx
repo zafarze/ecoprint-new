@@ -38,10 +38,14 @@ export default function Header({ onMenuClick }: HeaderProps) {
 		const syncToast = toast.loading('Синхронизация данных...');
 
 		try {
-			const res = await fetch('http://https://ecoprint-api-789088295892.europe-west3.run.app/api/sync-sheets/', {
+			// Берем базовый URL из .env файла (Vite подставит нужное значение: локальное или продакшен)
+			const baseUrl = import.meta.env.VITE_API_URL;
+
+			const res = await fetch(`${baseUrl}/api/sync-sheets/`, {
 				method: 'POST',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
+
 			if (res.ok) {
 				toast.success('Синхронизация успешно выполнена!', { id: syncToast });
 			} else {

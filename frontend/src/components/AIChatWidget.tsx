@@ -32,25 +32,61 @@ export default function AIChatWidget() {
 		e?.preventDefault();
 		if (!inputText.trim()) return;
 
-		// Сообщение пользователя
-		const newUserMsg: Message = { id: Date.now(), text: inputText.trim(), sender: 'user' };
+		const userText = inputText.trim();
+
+		// 1. Добавляем сообщение пользователя в чат
+		const newUserMsg: Message = { id: Date.now(), text: userText, sender: 'user' };
 		setMessages(prev => [...prev, newUserMsg]);
 		setInputText('');
 		setIsTyping(true);
 
-		// Имитация ответа от бэкенда ИИ
-		setTimeout(() => {
-			setIsTyping(false);
-			const newBotMsg: Message = {
+		// 2. Отправляем запрос на наш Django Backend
+		try {
+			const token = localStorage.getItem('token');
+			const baseUrl = import.meta.env.VITE_API_URL;
+
+			const res = await fetch(`${baseUrl}/api/ai-chat/`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${token}`
+				},
+				body: JSON.stringify({ message: userText })
+			});
+
+			const data = await res.json();
+
+			if (res.ok) {
+				// Успешный ответ от ИИ
+				const newBotMsg: Message = {
+					id: Date.now(),
+					text: data.answer || 'Извините, я не понял ответ.',
+					sender: 'bot'
+				};
+				setMessages(prev => [...prev, newBotMsg]);
+			} else {
+				// Если бэкенд вернул ошибку
+				const errorMsg: Message = {
+					id: Date.now(),
+					text: `**Ошибка:** ${data.error || 'Что-то пошло не так на сервере 😔'}`,
+					sender: 'bot'
+				};
+				setMessages(prev => [...prev, errorMsg]);
+			}
+		} catch (error) {
+			// Ошибка сети (например, сервер упал)
+			const errorMsg: Message = {
 				id: Date.now(),
-				text: 'Я пока работаю в демо-режиме, но скоро смогу анализировать данные базы! 🚀',
+				text: '**Сбой сети.** Проверьте подключение к серверу. 📡',
 				sender: 'bot'
 			};
-			setMessages(prev => [...prev, newBotMsg]);
-		}, 1500);
+			setMessages(prev => [...prev, errorMsg]);
+		} finally {
+			setIsTyping(false); // Выключаем анимацию печати в любом случае
+		}
 	};
 
-	// 100% безопасный парсер (вместо dangerouslySetInnerHTML)
+	// Безопасный парсер жирного шрифта (Markdown-like)
 	const renderMessageText = (text: string) => {
 		const parts = text.split(/(\*\*.*?\*\*)/g);
 		return parts.map((part, i) => {
@@ -109,9 +145,9 @@ export default function AIChatWidget() {
 										}`}>
 										{msg.sender === 'user' ? <User size={14} /> : <Bot size={14} />}
 									</div>
-									<div className={`p-3.5 text-sm font-bold shadow-sm ${msg.sender === 'user'
-											? 'bg-primary text-white rounded-2xl rounded-tr-sm'
-											: 'bg-white border border-slate-100 text-slate-600 rounded-2xl rounded-tl-sm'
+									<div className={`p-3.5 text-sm font-bold shadow-sm whitespace-pre-wrap ${msg.sender === 'user'
+										? 'bg-primary text-white rounded-2xl rounded-tr-sm'
+										: 'bg-white border border-slate-100 text-slate-600 rounded-2xl rounded-tl-sm'
 										}`}>
 										{renderMessageText(msg.text)}
 									</div>
@@ -157,7 +193,7 @@ export default function AIChatWidget() {
 				)}
 			</AnimatePresence>
 
-			{/* Кнопка открытия (Плавающая кнопка - FAB) */}
+			{/* Кнопка открытия */}
 			<motion.button
 				whileHover={{ scale: 1.05 }}
 				whileTap={{ scale: 0.95 }}
@@ -177,7 +213,6 @@ export default function AIChatWidget() {
 					)}
 				</AnimatePresence>
 
-				{/* Красный индикатор (точка) */}
 				{!isOpen && (
 					<span className="absolute top-0 right-0 w-4 h-4 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
 				)}

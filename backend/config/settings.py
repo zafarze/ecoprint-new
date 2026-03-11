@@ -130,7 +130,11 @@ STATIC_URL = 'static/'
 # Папка, куда соберется вся статика при команде collectstatic
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Алгоритм кэширования и сжатия статики от WhiteNoise
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
