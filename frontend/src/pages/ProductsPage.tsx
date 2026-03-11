@@ -32,7 +32,8 @@ export default function ProductsPage() {
 		setIsLoading(true);
 		const token = localStorage.getItem('token');
 		try {
-			const res = await fetch('http://127.0.0.1:8000/api/products/', {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/products/`, {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 
@@ -66,9 +67,10 @@ export default function ProductsPage() {
 
 	const handleSaveProduct = async (productData: any) => {
 		const token = localStorage.getItem('token');
+		// ИЗМЕНЕНО: Используем переменную окружения
 		const url = editingProduct
-			? `http://127.0.0.1:8000/api/products/${editingProduct.id}/`
-			: 'http://127.0.0.1:8000/api/products/';
+			? `${import.meta.env.VITE_API_URL}/api/products/${editingProduct.id}/`
+			: `${import.meta.env.VITE_API_URL}/api/products/`;
 		const method = editingProduct ? 'PUT' : 'POST';
 		const saveToast = toast.loading('Сохранение...');
 
@@ -108,7 +110,8 @@ export default function ProductsPage() {
 		const deleteToast = toast.loading('Удаление...');
 
 		try {
-			const res = await fetch(`http://127.0.0.1:8000/api/products/${productToDelete.id}/`, {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/products/${productToDelete.id}/`, {
 				method: 'DELETE',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});

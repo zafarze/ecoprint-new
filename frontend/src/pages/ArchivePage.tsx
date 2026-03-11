@@ -21,7 +21,8 @@ export default function ArchivePage() {
 		}
 
 		try {
-			const res = await fetch('http://127.0.0.1:8000/api/orders/?is_archived=true', {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/?is_archived=true`, {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 
@@ -51,7 +52,8 @@ export default function ArchivePage() {
 
 		const token = localStorage.getItem('token');
 		try {
-			const res = await fetch(`http://127.0.0.1:8000/api/orders/${id}/`, {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${id}/`, {
 				method: 'PATCH',
 				headers: {
 					'Content-Type': 'application/json',

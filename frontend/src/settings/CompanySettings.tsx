@@ -17,7 +17,8 @@ export default function CompanySettings() {
 		const fetchSettings = async () => {
 			const token = localStorage.getItem('token');
 			try {
-				const res = await fetch('http://127.0.0.1:8000/api/settings/company/', {
+				// ИЗМЕНЕНО: Используем переменную окружения
+				const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/company/`, {
 					headers: { 'Authorization': `Bearer ${token}` }
 				});
 				if (res.ok) {
@@ -41,7 +42,8 @@ export default function CompanySettings() {
 		const token = localStorage.getItem('token');
 
 		try {
-			const res = await fetch('http://127.0.0.1:8000/api/settings/company/', {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/company/`, {
 				method: 'PUT',
 				headers: {
 					'Content-Type': 'application/json',

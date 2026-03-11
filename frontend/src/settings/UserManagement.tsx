@@ -15,7 +15,8 @@ export default function UserManagement() {
 
 	const loadUsers = () => {
 		const token = localStorage.getItem('token');
-		fetch('http://127.0.0.1:8000/api/users/', {
+		// ИЗМЕНЕНО: Используем переменную окружения
+		fetch(`${import.meta.env.VITE_API_URL}/api/users/`, {
 			headers: { 'Authorization': `Bearer ${token}` }
 		})
 			.then(res => res.json())
@@ -45,7 +46,8 @@ export default function UserManagement() {
 		if (!userToDelete) return;
 		const token = localStorage.getItem('token');
 		try {
-			const res = await fetch(`http://127.0.0.1:8000/api/users/${userToDelete.id}/`, {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userToDelete.id}/`, {
 				method: 'DELETE',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});

@@ -15,7 +15,8 @@ export default function ProductManagement() {
 
 	const loadProducts = () => {
 		const token = localStorage.getItem('token');
-		fetch('http://127.0.0.1:8000/api/products/', {
+		// ИЗМЕНЕНО: Используем переменную окружения
+		fetch(`${import.meta.env.VITE_API_URL}/api/products/`, {
 			headers: { 'Authorization': `Bearer ${token}` }
 		})
 			.then(res => res.json())
@@ -33,7 +34,10 @@ export default function ProductManagement() {
 	};
 
 	const handleSaveProduct = async (productData: any) => {
-		const url = editingProduct ? `http://127.0.0.1:8000/api/products/${editingProduct.id}/` : 'http://127.0.0.1:8000/api/products/';
+		// ИЗМЕНЕНО: Используем переменную окружения
+		const url = editingProduct
+			? `${import.meta.env.VITE_API_URL}/api/products/${editingProduct.id}/`
+			: `${import.meta.env.VITE_API_URL}/api/products/`;
 		const method = editingProduct ? 'PUT' : 'POST';
 		const token = localStorage.getItem('token');
 
@@ -69,7 +73,8 @@ export default function ProductManagement() {
 		const token = localStorage.getItem('token');
 
 		try {
-			const res = await fetch(`http://127.0.0.1:8000/api/products/${productToDelete.id}/`, {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/products/${productToDelete.id}/`, {
 				method: 'DELETE',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});

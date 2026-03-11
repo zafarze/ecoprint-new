@@ -38,7 +38,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 		const syncToast = toast.loading('Синхронизация данных...');
 
 		try {
-			const res = await fetch('http://127.0.0.1:8000/api/sync-sheets/', {
+			const res = await fetch('http://https://ecoprint-api-789088295892.europe-west3.run.app/api/sync-sheets/', {
 				method: 'POST',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});

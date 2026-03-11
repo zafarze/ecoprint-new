@@ -33,12 +33,15 @@ def get_context_from_db():
     return context
 
 def ask_gemini(user_question):
-    api_key = getattr(settings, 'GEMINI_API_KEY', None)
+    # ИЗМЕНЕНО: Сначала ищем ключ в переменных окружения (для Cloud Run), 
+    # а если там нет — в настройках Django (для локальной разработки)
+    api_key = os.environ.get('GEMINI_API_KEY') or getattr(settings, 'GEMINI_API_KEY', None)
+    
     if not api_key:
-        return "Ошибка сервера: Не настроен API ключ Gemini. Проверьте настройки."
+        return "Ошибка сервера: Не настроен API ключ Gemini. Добавьте его в переменные окружения Cloud Run."
 
     try:
-        # В новой версии клиент создается так:
+        # Инициализация клиента
         client = genai.Client(api_key=api_key)
     except Exception as e:
         print(f"❌ ОШИБКА настройки Gemini: {e}")
@@ -56,16 +59,15 @@ def ask_gemini(user_question):
     full_prompt = (
         f"{system_instruction}\n\n"
         f"ДАННЫЕ ИЗ БАЗЫ:\n{context_data}\n\n"
-        f"ВОПРОС ПОЛЬЗОВАТЕЛЯ: {user_question}"
+        f"Вопрос пользователя: {user_question}"
     )
     
     try:
-        # В новой версии запрос отправляется так:
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=full_prompt,
         )
         return response.text
     except Exception as e:
-        print(f"Gemini Error: {e}")
-        return f"Извините, ошибка соединения с AI: {str(e)}"
+        print(f"❌ Ошибка при генерации ответа: {e}")
+        return "Произошла ошибка при обращении к ИИ. Попробуйте позже."

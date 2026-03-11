@@ -15,7 +15,8 @@ export default function IntegrationsSettings() {
 		const fetchSettings = async () => {
 			const token = localStorage.getItem('token');
 			try {
-				const res = await fetch('http://127.0.0.1:8000/api/settings/telegram/', {
+				// ИЗМЕНЕНО: Используем переменную окружения
+				const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/telegram/`, {
 					headers: { 'Authorization': `Bearer ${token}` }
 				});
 				if (res.ok) {
@@ -38,7 +39,8 @@ export default function IntegrationsSettings() {
 		const token = localStorage.getItem('token');
 
 		try {
-			const res = await fetch('http://127.0.0.1:8000/api/settings/telegram/', {
+			// ИЗМЕНЕНО: Используем переменную окружения
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/telegram/`, {
 				method: 'PUT',
 				headers: {
 					'Content-Type': 'application/json',

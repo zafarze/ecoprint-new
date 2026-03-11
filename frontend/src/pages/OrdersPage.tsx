@@ -43,7 +43,8 @@ export default function OrdersPage() {
 		const token = localStorage.getItem('token');
 		if (!token) return;
 		try {
-			const res = await fetch('http://127.0.0.1:8000/api/orders/?is_archived=false', { headers: { 'Authorization': `Bearer ${token}` } });
+			// ИЗМЕНЕНО
+			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/?is_archived=false`, { headers: { 'Authorization': `Bearer ${token}` } });
 			if (res.ok) setOrders(await res.json());
 		} catch (err) { }
 	};
@@ -64,7 +65,8 @@ export default function OrdersPage() {
 		setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: o.items.map((i: any) => i.id === item.id ? { ...i, status: newStatus } : i) } : o));
 		try {
 			const token = localStorage.getItem('token');
-			await fetch(`http://127.0.0.1:8000/api/items/${item.id}/`, {
+			// ИЗМЕНЕНО
+			await fetch(`${import.meta.env.VITE_API_URL}/api/items/${item.id}/`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
 				body: JSON.stringify({ status: newStatus })
@@ -78,7 +80,8 @@ export default function OrdersPage() {
 		setOrders(prev => prev.map(o => o.id === order.id ? { ...o, is_received: newVal } : o));
 		try {
 			const token = localStorage.getItem('token');
-			await fetch(`http://127.0.0.1:8000/api/orders/${order.id}/`, {
+			// ИЗМЕНЕНО
+			await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${order.id}/`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
 				body: JSON.stringify({ is_received: newVal })
@@ -88,7 +91,8 @@ export default function OrdersPage() {
 	};
 
 	const handleSaveOrder = async (orderData: any) => {
-		const url = editingOrder ? `http://127.0.0.1:8000/api/orders/${editingOrder.id}/` : 'http://127.0.0.1:8000/api/orders/';
+		// ИЗМЕНЕНО
+		const url = editingOrder ? `${import.meta.env.VITE_API_URL}/api/orders/${editingOrder.id}/` : `${import.meta.env.VITE_API_URL}/api/orders/`;
 		const method = editingOrder ? 'PUT' : 'POST';
 		const token = localStorage.getItem('token');
 		const saveToast = toast.loading('Сохранение...');
@@ -101,13 +105,15 @@ export default function OrdersPage() {
 
 	const handleArchiveOrder = async (orderId: number) => {
 		const token = localStorage.getItem('token');
-		try { await fetch(`http://127.0.0.1:8000/api/orders/${orderId}/archive/`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }); toast.success('В архиве'); loadOrders(); } catch (e) { }
+		// ИЗМЕНЕНО
+		try { await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderId}/archive/`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }); toast.success('В архиве'); loadOrders(); } catch (e) { }
 	};
 
 	const confirmDelete = async () => {
 		if (!orderToDelete) return;
 		const token = localStorage.getItem('token');
-		try { await fetch(`http://127.0.0.1:8000/api/orders/${orderToDelete.id}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); toast.success('Удалено'); setIsDeleteModalOpen(false); loadOrders(); } catch (e) { }
+		// ИЗМЕНЕНО
+		try { await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderToDelete.id}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); toast.success('Удалено'); setIsDeleteModalOpen(false); loadOrders(); } catch (e) { }
 	};
 
 	// === ФИЛЬТРЫ И УТИЛИТЫ ===

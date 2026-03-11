@@ -34,7 +34,8 @@ export default function StatisticsPage() {
 			}
 
 			try {
-				const res = await fetch(`http://127.0.0.1:8000/api/statistics-data/?period=${period}`, {
+				// ИЗМЕНЕНО: Используем переменную окружения
+				const res = await fetch(`${import.meta.env.VITE_API_URL}/api/statistics-data/?period=${period}`, {
 					headers: { 'Authorization': `Bearer ${token}` }
 				});
 
