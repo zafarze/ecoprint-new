@@ -19,7 +19,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .ai_service import ask_gemini
 from .models import Order, Item, Product, CompanySettings, TelegramSettings
 
-# 🔥 ИМПОРТИРУЕМ ОБА СЕРИАЛИЗАТОРА
 from .serializers import (
     OrderSerializer, OrderListSerializer, ProductSerializer, UserSimpleSerializer, 
     ItemSerializer, ItemWriteSerializer, CustomTokenObtainPairSerializer,
@@ -37,24 +36,24 @@ class IsAdminOrCantDelete(BasePermission):
         return True
 
 class OrderViewSet(viewsets.ModelViewSet):
-    # Я оставил авторизацию закомментированной, как у тебя было для тестов
-    #permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
-    # 🔥 ДИНАМИЧЕСКИЙ ВЫБОР СЕРИАЛИЗАТОРА
     def get_serializer_class(self):
         if self.action == 'list':
-            return OrderListSerializer # Быстрый для списка
-        return OrderSerializer # Полный для модалки и сохранений
+            return OrderListSerializer 
+        return OrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.all().order_by('-created_at')
+        # 🔥 ИСПРАВЛЕНИЕ ПУНКТ 5: Сортировка по дедлайну (самые срочные сверху)
+        queryset = Order.objects.all().annotate(
+            min_deadline=Min('items__deadline')
+        ).order_by(F('min_deadline').asc(nulls_last=True), '-created_at')
         
         is_archived = self.request.query_params.get('is_archived', None)
         if is_archived is not None:
             is_archived_bool = is_archived.lower() == 'true'
             queryset = queryset.filter(is_archived=is_archived_bool)
             
-        # 🔥 УБРАЛИ ЗАПРОС ИСТОРИИ ДЛЯ СПИСКА
         if self.action == 'list':
             return queryset.prefetch_related('items__responsible_user')
             
@@ -103,18 +102,14 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 class ItemViewSet(viewsets.ModelViewSet):
     queryset = Item.objects.all()
-    # 🔥 ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ТЕСТОВ БЕЗ ЛОГИНА
-    # permission_classes = [IsAuthenticated, IsAdminOrCantDelete]
 
     def get_serializer_class(self):
         if self.request.method in ['POST', 'PUT', 'PATCH']:
             return ItemWriteSerializer
         return ItemSerializer
 
-    # 🔥 ДОБАВЛЯЕМ ЭТОТ МЕТОД:
     def perform_update(self, serializer):
         item = serializer.save()
-        # Принудительно дергаем обновление статуса родительского заказа
         if hasattr(item.order, 'update_status'):
             item.order.update_status()
 
@@ -122,7 +117,6 @@ class ItemViewSet(viewsets.ModelViewSet):
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('name')
     serializer_class = ProductSerializer
-    # permission_classes = [permissions.IsAuthenticated] # Можно отключить и здесь, если будут проблемы с шаблонами
     pagination_class = None 
     
     @method_decorator(never_cache)
@@ -133,12 +127,10 @@ class ProductViewSet(viewsets.ModelViewSet):
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.filter(is_active=True).order_by('first_name')
     serializer_class = UserSimpleSerializer
-    # permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
 
 @api_view(['POST'])
-# @permission_classes([permissions.IsAuthenticated])
 def chat_with_ai(request):
     question = request.data.get('message', '')
     if not question:
@@ -148,7 +140,6 @@ def chat_with_ai(request):
 
 
 @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
 def statistics_data_view(request):
     period = request.query_params.get('period', 'week')
     if not request.user.is_superuser:
@@ -229,7 +220,6 @@ def statistics_data_view(request):
 
 
 @api_view(['POST'])
-# @permission_classes([permissions.IsAuthenticated])
 def sync_to_google_sheets(request):
     try:
         service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
@@ -277,8 +267,6 @@ def sync_to_google_sheets(request):
 
 
 class CompanySettingsAPIView(APIView):
-    # permission_classes = [IsAuthenticated]
-
     def get(self, request):
         obj, _ = CompanySettings.objects.get_or_create(id=1)
         return Response(CompanySettingsSerializer(obj).data)
@@ -293,8 +281,6 @@ class CompanySettingsAPIView(APIView):
 
 
 class TelegramSettingsAPIView(APIView):
-    # permission_classes = [IsAuthenticated]
-
     def get(self, request):
         obj, _ = TelegramSettings.objects.get_or_create(id=1)
         return Response(TelegramSettingsSerializer(obj).data)
@@ -309,19 +295,24 @@ class TelegramSettingsAPIView(APIView):
 
 
 @api_view(['GET'])
-# @permission_classes([IsAuthenticated]) # Закомментировано для тестов
 def header_stats(request):
     today = timezone.now().date()
     tomorrow = today + timedelta(days=1)
 
-    # Ищем только активные заказы (не выданы и не в архиве)
-    active_orders = Order.objects.filter(is_archived=False, is_received=False)
+    # Ищем только активные товары (заказ не выдан, не в архиве, товар НЕ готов)
+    active_items = Item.objects.filter(
+        order__is_archived=False, 
+        order__is_received=False
+    ).exclude(status='ready')
     
-    # Считаем уникальные заказы, у которых есть товары с нужным дедлайном
-    today_count = active_orders.filter(items__deadline=today).distinct().count()
-    tomorrow_count = active_orders.filter(items__deadline=tomorrow).distinct().count()
+    today_count = active_items.filter(deadline=today).values('order').distinct().count()
+    tomorrow_count = active_items.filter(deadline=tomorrow).values('order').distinct().count()
+    
+    # 🔥 НОВОЕ: Считаем просроченные (дедлайн строго меньше сегодняшнего дня)
+    overdue_count = active_items.filter(deadline__lt=today).values('order').distinct().count()
 
     return Response({
         'today': today_count,
-        'tomorrow': tomorrow_count
+        'tomorrow': tomorrow_count,
+        'overdue': overdue_count
     })
