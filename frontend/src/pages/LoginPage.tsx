@@ -3,6 +3,9 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-mo
 import { Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+// 🔥 ИМПОРТИРУЕМ НАШ НАСТРОЕННЫЙ API
+import api from '../api/api';
+
 export default function LoginPage() {
 	const navigate = useNavigate();
 	const currentYear = new Date().getFullYear();
@@ -21,7 +24,7 @@ export default function LoginPage() {
 	const rotateY = useTransform(x, [-100, 100], [-5, 5]);
 
 	useEffect(() => {
-		// Чистим старые данные при заходе на страницу логина (выход из системы)
+		// Железобетонная очистка при загрузке страницы логина
 		localStorage.removeItem('token');
 		localStorage.removeItem('user');
 	}, []);
@@ -42,44 +45,41 @@ export default function LoginPage() {
 		x.set(0); y.set(0);
 	};
 
-	// --- ОБНОВЛЕННАЯ ЛОГИКА АВТОРИЗАЦИИ ---
+	// --- ОБНОВЛЕННАЯ ЛОГИКА АВТОРИЗАЦИИ (Через Axios) ---
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setIsLoading(true);
 		setError('');
 
 		try {
-			// ИЗМЕНЕНО: Используем переменную окружения
-			const response = await fetch(`${import.meta.env.VITE_API_URL}/api/token/`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ username, password }),
-			});
+			// Магия Axios: он сам подставит базовый URL и распарсит JSON!
+			const response = await api.post('token/', { username, password });
 
-			if (response.ok) {
-				const data = await response.json();
-				console.log("Успешный логин! Ответ сервера:", data);
+			// Данные уже лежат в response.data
+			const data = response.data;
+			console.log("Успешный логин! Ответ сервера:", data);
 
-				// Сохраняем access токен
-				localStorage.setItem('token', data.access);
+			// Сохраняем access токен (чистая строка, без кавычек)
+			localStorage.setItem('token', data.access);
 
-				// СОХРАНЯЕМ ПОЛНЫЕ ДАННЫЕ ПОЛЬЗОВАТЕЛЯ (Имя, Фамилия, Email), которые прислал Django!
-				if (data.user) {
-					localStorage.setItem('user', JSON.stringify(data.user));
-				} else {
-					localStorage.setItem('user', JSON.stringify({ username }));
-				}
-
-				// Перекидываем пользователя на главную страницу (Дашборд)
-				navigate('/');
+			// СОХРАНЯЕМ ПОЛНЫЕ ДАННЫЕ ПОЛЬЗОВАТЕЛЯ
+			if (data.user) {
+				localStorage.setItem('user', JSON.stringify(data.user));
 			} else {
-				setError('Неверный логин или пароль');
+				localStorage.setItem('user', JSON.stringify({ username }));
 			}
-		} catch (err) {
+
+			// Перекидываем пользователя на главную страницу (Дашборд)
+			navigate('/');
+
+		} catch (err: any) {
 			console.error('Ошибка входа:', err);
-			setError('Нет связи с сервером Django. Проверьте, запущен ли он.');
+			// Axios автоматически прокидывает статус ошибки в err.response
+			if (err.response && err.response.status === 401) {
+				setError('Неверный логин или пароль');
+			} else {
+				setError('Нет связи с сервером Django. Проверьте, запущен ли он.');
+			}
 		} finally {
 			setIsLoading(false);
 		}

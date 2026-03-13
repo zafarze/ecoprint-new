@@ -1,6 +1,9 @@
 import os
+import threading
 import gspread
 from datetime import date, timedelta
+
+from django.db import transaction  # 🔥 ДОБАВЛЕНО: для защиты базы данных (транзакции)
 from django.utils import timezone
 from django.conf import settings
 from django.db.models import Min, F, Count
@@ -36,7 +39,7 @@ class IsAdminOrCantDelete(BasePermission):
         return True
 
 class OrderViewSet(viewsets.ModelViewSet):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО: Защита эндпоинта включена
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -44,7 +47,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         return OrderSerializer
 
     def get_queryset(self):
-        # 🔥 ИСПРАВЛЕНИЕ ПУНКТ 5: Сортировка по дедлайну (самые срочные сверху)
         queryset = Order.objects.all().annotate(
             min_deadline=Min('items__deadline')
         ).order_by(F('min_deadline').asc(nulls_last=True), '-created_at')
@@ -66,26 +68,51 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         order = serializer.save()
+        # 🔥 ИСПРАВЛЕНО: Отправка в Telegram работает в фоне, ускоряя ответ сервера клиенту
         try:
-            send_telegram_notification(order)
+            threading.Thread(target=send_telegram_notification, args=(order,)).start()
         except Exception as e:
-            print(f"Ошибка Telegram: {e}")
+            print(f"Ошибка запуска потока Telegram: {e}")
 
     @action(detail=False, methods=['post'])
     def trigger_auto_archive(self, request):
-        two_days_ago = timezone.now() - timedelta(days=2)
-        archived_count = Order.objects.filter(
-            is_archived=False, status='ready', updated_at__lte=two_days_ago
-        ).update(is_archived=True)
-        return Response({'status': 'success', 'message': f'{archived_count} заказов отправлено в архив.'})
+        # 1. Считаем дату: ровно 3 дня назад от текущего момента
+        three_days_ago = timezone.now() - timedelta(days=3)
+        
+        # 2. Ищем заказы: не в архиве, ВЫДАНЫ клиенту и дата выдачи старше 3 дней
+        orders_to_archive = Order.objects.filter(
+            is_archived=False, 
+            is_received=True, 
+            received_at__lte=three_days_ago
+        )
+        
+        # Собираем ID этих заказов, чтобы заархивировать и сами заказы, и их товары
+        order_ids = list(orders_to_archive.values_list('id', flat=True))
+        
+        if order_ids:
+            # Безопасная транзакция: архивируем всё разом
+            with transaction.atomic():
+                Order.objects.filter(id__in=order_ids).update(is_archived=True)
+                Item.objects.filter(order_id__in=order_ids).update(is_archived=True)
+                
+        return Response({
+            'status': 'success', 
+            'message': f'{len(order_ids)} заказов автоматически отправлено в архив.'
+        })
 
     @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
         try:
             order = self.get_object()
-            c = order.items.update(is_archived=True)
-            order.update_status() 
-            return Response({'status': 'success', 'message': f'{c} товаров архивировано.'})
+            with transaction.atomic():
+                # 🔥 Моментально прячем сам заказ
+                order.is_archived = True
+                order.save(update_fields=['is_archived'])
+                
+                # И прячем все товары внутри него
+                c = order.items.filter(is_archived=False).update(is_archived=True)
+                order.update_status() 
+            return Response({'status': 'success', 'message': f'Заказ и {c} товаров архивированы.'})
         except Exception as e:
             return Response({'status': 'error', 'message': str(e)}, status=400)
 
@@ -93,14 +120,21 @@ class OrderViewSet(viewsets.ModelViewSet):
     def unarchive(self, request, pk=None):
         try:
             order = self.get_object()
-            c = order.items.update(is_archived=False)
-            order.update_status()
-            return Response({'status': 'success', 'message': f'{c} товаров восстановлено.'})
+            with transaction.atomic():
+                # 🔥 Моментально возвращаем сам заказ
+                order.is_archived = False
+                order.save(update_fields=['is_archived'])
+                
+                # И возвращаем его товары
+                c = order.items.filter(is_archived=True).update(is_archived=False)
+                order.update_status()
+            return Response({'status': 'success', 'message': f'Заказ и {c} товаров восстановлены.'})
         except Exception as e:
             return Response({'status': 'error', 'message': str(e)}, status=400)
 
 
 class ItemViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
     queryset = Item.objects.all()
 
     def get_serializer_class(self):
@@ -115,6 +149,7 @@ class ItemViewSet(viewsets.ModelViewSet):
 
 
 class ProductViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
     queryset = Product.objects.all().order_by('name')
     serializer_class = ProductSerializer
     pagination_class = None 
@@ -125,12 +160,14 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
     queryset = User.objects.filter(is_active=True).order_by('first_name')
     serializer_class = UserSimpleSerializer
     pagination_class = None
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО: Защита эндпоинта ИИ
 def chat_with_ai(request):
     question = request.data.get('message', '')
     if not question:
@@ -140,6 +177,7 @@ def chat_with_ai(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО
 def statistics_data_view(request):
     period = request.query_params.get('period', 'week')
     if not request.user.is_superuser:
@@ -220,6 +258,7 @@ def statistics_data_view(request):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО
 def sync_to_google_sheets(request):
     try:
         service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
@@ -244,7 +283,8 @@ def sync_to_google_sheets(request):
         
         data = [['ID', 'Клиент', 'Дата', 'Статус заказа', 'Товар', 'Кол-во', 'Дедлайн', 'Статус товара', 'Ответственный', 'Комментарий']]
 
-        for order in orders:
+        # 🔥 ИСПРАВЛЕНО: iterator() защищает от переполнения оперативной памяти сервера
+        for order in orders.iterator(chunk_size=1000):
             created_date = order.created_at.strftime("%d.%m.%Y %H:%M")
             if not order.items.exists():
                 data.append([order.id, order.client, created_date, order.get_status_display(), "-", "-", "-", "-", "-", "-"])
@@ -267,6 +307,8 @@ def sync_to_google_sheets(request):
 
 
 class CompanySettingsAPIView(APIView):
+    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
+    
     def get(self, request):
         obj, _ = CompanySettings.objects.get_or_create(id=1)
         return Response(CompanySettingsSerializer(obj).data)
@@ -281,6 +323,8 @@ class CompanySettingsAPIView(APIView):
 
 
 class TelegramSettingsAPIView(APIView):
+    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
+    
     def get(self, request):
         obj, _ = TelegramSettings.objects.get_or_create(id=1)
         return Response(TelegramSettingsSerializer(obj).data)
@@ -295,6 +339,7 @@ class TelegramSettingsAPIView(APIView):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО
 def header_stats(request):
     today = timezone.now().date()
     tomorrow = today + timedelta(days=1)
@@ -308,7 +353,6 @@ def header_stats(request):
     today_count = active_items.filter(deadline=today).values('order').distinct().count()
     tomorrow_count = active_items.filter(deadline=tomorrow).values('order').distinct().count()
     
-    # 🔥 НОВОЕ: Считаем просроченные (дедлайн строго меньше сегодняшнего дня)
     overdue_count = active_items.filter(deadline__lt=today).values('order').distinct().count()
 
     return Response({

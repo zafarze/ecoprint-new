@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Clock, CalendarDays, Star, BarChart3, PieChart as PieChartIcon, Loader2 } from 'lucide-react';
 import {
 	AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -7,13 +6,16 @@ import {
 } from 'recharts';
 import Card from '../components/ui/Card';
 
+// 🔥 1. Импортируем наш настроенный Axios
+import api from '../api/api';
+
 // Цвета для круговой диаграммы (Tailwind цвета: изумрудный, желтый, розовый, синий)
 const PIE_COLORS = ['#10b981', '#f59e0b', '#ec4899', '#3b82f6'];
 
 export default function StatisticsPage() {
-	const navigate = useNavigate();
 	const [period, setPeriod] = useState('week');
 	const [isLoading, setIsLoading] = useState(true);
+
 	const [stats, setStats] = useState({
 		total_orders: 0,
 		pending_orders: 0,
@@ -26,38 +28,22 @@ export default function StatisticsPage() {
 	useEffect(() => {
 		const fetchStats = async () => {
 			setIsLoading(true);
-			const token = localStorage.getItem('token');
-
-			if (!token) {
-				navigate('/login');
-				return;
-			}
 
 			try {
-				// ИЗМЕНЕНО: Используем переменную окружения
-				const res = await fetch(`${import.meta.env.VITE_API_URL}/api/statistics-data/?period=${period}`, {
-					headers: { 'Authorization': `Bearer ${token}` }
-				});
+				// 🔥 2. Магия api.ts: Короткий запрос! Токен и проверки на 401 работают под капотом.
+				const res = await api.get(`statistics-data/?period=${period}`);
 
-				if (res.status === 401) {
-					localStorage.removeItem('token');
-					navigate('/login');
-					return;
-				}
-
-				if (res.ok) {
-					const data = await res.json();
-					setStats(data);
-				}
+				// Axios автоматически парсит JSON, данные лежат в свойстве .data
+				setStats(res.data);
 			} catch (err) {
-				console.error("Ошибка сети:", err);
+				console.error("Ошибка при загрузке статистики:", err);
 			} finally {
 				setIsLoading(false);
 			}
 		};
 
 		fetchStats();
-	}, [period, navigate]);
+	}, [period]); // 🧹 Убрали navigate, он здесь больше не нужен
 
 	// Форматируем данные для круговой диаграммы
 	const pieData = stats.status_counts.labels.map((label: string, index: number) => ({
@@ -118,10 +104,10 @@ export default function StatisticsPage() {
 
 			{/* Верхний ряд: Виджеты KPI (Сетка 4 колонки) */}
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-				<StatWidget title="Всего заказов" value={stats.total_orders} icon={TrendingUp} colorClass="bg-blue-100 text-blue-600" delay="0ms" />
-				<StatWidget title="В ожидании" value={stats.pending_orders} icon={Clock} colorClass="bg-amber-100 text-amber-600" delay="100ms" />
-				<StatWidget title="Создано сегодня" value={stats.created_today} icon={CalendarDays} colorClass="bg-emerald-100 text-emerald-600" delay="200ms" />
-				<StatWidget title="Хит продаж" value={stats.top_product} icon={Star} colorClass="bg-pink-100 text-pink-600" delay="300ms" />
+				<StatWidget title="Всего заказов" value={stats.total_orders} icon={TrendingUp} colorClass="bg-blue-100 text-blue-600" />
+				<StatWidget title="В ожидании" value={stats.pending_orders} icon={Clock} colorClass="bg-amber-100 text-amber-600" />
+				<StatWidget title="Создано сегодня" value={stats.created_today} icon={CalendarDays} colorClass="bg-emerald-100 text-emerald-600" />
+				<StatWidget title="Хит продаж" value={stats.top_product} icon={Star} colorClass="bg-pink-100 text-pink-600" />
 			</div>
 
 			{/* Нижний ряд: Графики */}

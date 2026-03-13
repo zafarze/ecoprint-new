@@ -68,10 +68,22 @@ class ItemWriteSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'quantity', 'status', 'deadline', 'comment', 'responsible_user_id']
 
 
-# 🔥 НОВЫЙ СЕРИАЛИЗАТОР: Только для быстрого списка (БЕЗ ИСТОРИИ)
-class OrderListSerializer(serializers.ModelSerializer):
+# 🔥 БАЗОВЫЙ СЕРИАЛИЗАТОР: Хранит общую логику для списков и деталей (DRY)
+class BaseOrderSerializer(serializers.ModelSerializer):
     items = serializers.SerializerMethodField()
 
+    def get_items(self, obj):
+        show_archived = self.context.get('show_archived', False)
+        # Благодаря prefetch_related во views.py, вызов obj.items.all() работает мгновенно из кэша
+        if show_archived:
+            items_to_show = [item for item in obj.items.all() if item.is_archived]
+        else:
+            items_to_show = [item for item in obj.items.all() if not item.is_archived]
+        return ItemSerializer(items_to_show, many=True).data
+
+
+# 🔥 СЕРИАЛИЗАТОР СПИСКА: Наследует get_items из BaseOrderSerializer
+class OrderListSerializer(BaseOrderSerializer):
     class Meta:
         model = Order
         fields = [
@@ -80,18 +92,9 @@ class OrderListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['status']
 
-    def get_items(self, obj):
-        show_archived = self.context.get('show_archived', False)
-        if show_archived:
-            items_to_show = [item for item in obj.items.all() if item.is_archived]
-        else:
-            items_to_show = [item for item in obj.items.all() if not item.is_archived]
-        return ItemSerializer(items_to_show, many=True).data
 
-
-# СТАРЫЙ СЕРИАЛИЗАТОР: Для создания, обновления и детального просмотра (С ИСТОРИЕЙ)
-class OrderSerializer(serializers.ModelSerializer):
-    items = serializers.SerializerMethodField()
+# 🔥 ДЕТАЛЬНЫЙ СЕРИАЛИЗАТОР: Наследует get_items и добавляет историю/сохранение
+class OrderSerializer(BaseOrderSerializer):
     items_write = ItemWriteSerializer(many=True, write_only=True, required=False)
     history = OrderHistorySerializer(many=True, read_only=True)
 
@@ -102,14 +105,6 @@ class OrderSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'items', 'items_write', 'history'
         ]
         read_only_fields = ['status']
-
-    def get_items(self, obj):
-        show_archived = self.context.get('show_archived', False)
-        if show_archived:
-            items_to_show = [item for item in obj.items.all() if item.is_archived]
-        else:
-            items_to_show = [item for item in obj.items.all() if not item.is_archived]
-        return ItemSerializer(items_to_show, many=True).data
 
     def create(self, validated_data):
         items_data = validated_data.pop('items_write', []) 

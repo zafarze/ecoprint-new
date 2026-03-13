@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, X, Send, Bot, User, Trash2 } from 'lucide-react'; // Добавили Trash2
+import { MessageSquare, X, Send, Bot, User, Trash2 } from 'lucide-react';
+
+// 🔥 Импортируем наш новый api
+import api from '../api/api';
 
 interface Message {
 	id: number;
@@ -19,7 +22,6 @@ export default function AIChatWidget() {
 	const [inputText, setInputText] = useState('');
 	const [isTyping, setIsTyping] = useState(false);
 
-	// 1. УМНАЯ ЗАГРУЗКА: При открытии страницы пытаемся достать историю из localStorage
 	const [messages, setMessages] = useState<Message[]>(() => {
 		const saved = localStorage.getItem('eco_ai_chat_history');
 		if (saved) {
@@ -34,12 +36,10 @@ export default function AIChatWidget() {
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 
-	// 2. АВТОСОХРАНЕНИЕ: Каждый раз, когда массив сообщений меняется, сохраняем его в localStorage
 	useEffect(() => {
 		localStorage.setItem('eco_ai_chat_history', JSON.stringify(messages));
 	}, [messages]);
 
-	// Автопрокрутка вниз
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 	}, [messages, isTyping, isOpen]);
@@ -56,41 +56,26 @@ export default function AIChatWidget() {
 		setInputText('');
 		setIsTyping(true);
 
-		// Отправка запроса на бэкенд
+		// 🔥 Обновленная отправка запроса через api.ts
 		try {
-			const token = localStorage.getItem('token');
-			const baseUrl = import.meta.env.VITE_API_URL;
+			// Токен и базовый URL подставляются автоматически!
+			const res = await api.post('ai-chat/', { message: userText });
 
-			const res = await fetch(`${baseUrl}/api/ai-chat/`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${token}`
-				},
-				body: JSON.stringify({ message: userText })
-			});
+			const newBotMsg: Message = {
+				id: Date.now(),
+				text: res.data.answer || 'Извините, я не понял ответ.',
+				sender: 'bot'
+			};
+			setMessages(prev => [...prev, newBotMsg]);
 
-			const data = await res.json();
+		} catch (error: any) {
+			// Обработка ошибок через axios
+			const serverError = error.response?.data?.error || 'Что-то пошло не так на сервере 😔';
+			const isNetworkError = !error.response; // Если нет ответа от сервера вообще
 
-			if (res.ok) {
-				const newBotMsg: Message = {
-					id: Date.now(),
-					text: data.answer || 'Извините, я не понял ответ.',
-					sender: 'bot'
-				};
-				setMessages(prev => [...prev, newBotMsg]);
-			} else {
-				const errorMsg: Message = {
-					id: Date.now(),
-					text: `**Ошибка:** ${data.error || 'Что-то пошло не так на сервере 😔'}`,
-					sender: 'bot'
-				};
-				setMessages(prev => [...prev, errorMsg]);
-			}
-		} catch (error) {
 			const errorMsg: Message = {
 				id: Date.now(),
-				text: '**Сбой сети.** Проверьте подключение к серверу. 📡',
+				text: isNetworkError ? '**Сбой сети.** Проверьте подключение к серверу. 📡' : `**Ошибка:** ${serverError}`,
 				sender: 'bot'
 			};
 			setMessages(prev => [...prev, errorMsg]);
@@ -99,13 +84,11 @@ export default function AIChatWidget() {
 		}
 	};
 
-	// Очистка истории чата
 	const clearHistory = () => {
 		setMessages([INITIAL_MESSAGE]);
 		localStorage.removeItem('eco_ai_chat_history');
 	};
 
-	// Безопасный парсер жирного шрифта
 	const renderMessageText = (text: string) => {
 		const parts = text.split(/(\*\*.*?\*\*)/g);
 		return parts.map((part, i) => {
@@ -118,7 +101,6 @@ export default function AIChatWidget() {
 
 	return (
 		<div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
-			{/* Окно чата */}
 			<AnimatePresence>
 				{isOpen && (
 					<motion.div
@@ -128,7 +110,6 @@ export default function AIChatWidget() {
 						transition={{ duration: 0.2 }}
 						className="bg-white w-[340px] sm:w-[380px] h-[500px] rounded-[2rem] shadow-2xl border border-slate-100 flex flex-col overflow-hidden mb-4"
 					>
-						{/* Шапка чата */}
 						<div className="bg-gradient-eco p-4 text-white flex justify-between items-center shadow-md z-10">
 							<div className="flex items-center gap-3">
 								<div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm shadow-inner">
@@ -143,7 +124,6 @@ export default function AIChatWidget() {
 								</div>
 							</div>
 							<div className="flex items-center gap-1">
-								{/* Кнопка очистки истории */}
 								<button
 									onClick={clearHistory}
 									className="p-2 bg-white/10 hover:bg-white/20 hover:text-red-200 rounded-xl transition-colors"
@@ -160,7 +140,6 @@ export default function AIChatWidget() {
 							</div>
 						</div>
 
-						{/* Область сообщений */}
 						<div className="flex-1 overflow-y-auto p-5 space-y-5 bg-slate-50 custom-scrollbar">
 							{messages.map((msg) => (
 								<motion.div
@@ -197,7 +176,6 @@ export default function AIChatWidget() {
 							<div ref={messagesEndRef} />
 						</div>
 
-						{/* Ввод сообщения */}
 						<div className="p-4 bg-white border-t border-slate-100">
 							<form onSubmit={sendMessage} className="relative flex items-center">
 								<input
@@ -220,7 +198,6 @@ export default function AIChatWidget() {
 				)}
 			</AnimatePresence>
 
-			{/* Кнопка открытия */}
 			<motion.button
 				whileHover={{ scale: 1.05 }}
 				whileTap={{ scale: 0.95 }}

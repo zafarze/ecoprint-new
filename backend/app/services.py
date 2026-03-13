@@ -2,7 +2,6 @@ from django.db import transaction
 from django.contrib.auth.models import User
 from typing import List, Dict, Any
 
-# ИСПРАВЛЕНО: Добавили импорт Product
 from .models import Order, Item, OrderHistory, Product
 
 class OrderService:
@@ -10,18 +9,25 @@ class OrderService:
     def _log_history(order: Order, user: User, message: str) -> None:
         OrderHistory.objects.create(order=order, user=user, message=message)
 
-    # 🔥 НОВЫЙ МЕТОД: Логика автосоздания шаблонов перенесена сюда из моделей
     @classmethod
     def _ensure_product_exists(cls, name: str) -> None:
         if not name:
             return
         clean_name = name.strip()
-        if clean_name and not Product.objects.filter(name__iexact=clean_name).exists():
-            Product.objects.create(
-                name=clean_name,
-                category='polygraphy',  # Категория по умолчанию
-                icon='fas fa-box-open'  # Иконка по умолчанию
-            )
+        
+        # 🔥 ОПТИМИЗАЦИЯ: get_or_create работает быстрее и безопаснее, 
+        # не допуская дубликатов при одновременных запросах (Race Condition)
+        if clean_name:
+            # Сначала быстро проверяем через iexact (без учета регистра)
+            if not Product.objects.filter(name__iexact=clean_name).exists():
+                # Если не нашли, создаем безопасно (на случай если кто-то успел создать за миллисекунду до нас)
+                Product.objects.get_or_create(
+                    name=clean_name,
+                    defaults={
+                        'category': 'polygraphy',  
+                        'icon': 'fas fa-box-open'  
+                    }
+                )
 
     @classmethod
     def update_order(cls, order: Order, validated_data: Dict[str, Any], user: User) -> Order:
@@ -37,6 +43,8 @@ class OrderService:
 
     @classmethod
     def _update_order_fields(cls, order: Order, data: Dict[str, Any], user: User) -> None:
+        from django.utils import timezone # 🔥 Убедись, что это импортировано в начале файла
+
         if 'client' in data:
             new_client = data['client']
             if order.client != new_client:
@@ -49,6 +57,13 @@ class OrderService:
         if 'is_received' in data:
             if order.is_received != data['is_received']:
                 order.is_received = data['is_received']
+                
+                # 🔥 МАГИЯ ЗДЕСЬ: Если заказ выдан — ставим дату. Если сняли галочку — стираем дату.
+                if order.is_received:
+                    order.received_at = timezone.now()
+                else:
+                    order.received_at = None
+
                 status_text = "Получен клиентом" if order.is_received else "Статус получения снят"
                 cls._log_history(order, user, status_text)
 
@@ -59,23 +74,28 @@ class OrderService:
 
     @classmethod
     def _sync_items(cls, order: Order, items_data: List[Dict[str, Any]], user: User) -> None:
+        # 🔥 ОПТИМИЗАЦИЯ N+1: Достаем все товары из базы ОДНИМ запросом и кладем в словарь.
+        # Теперь серверу не нужно бегать в базу данных на каждой итерации цикла.
+        existing_items = {item.id: item for item in order.items.filter(is_archived=False)}
         keep_ids = []
+        
         for item_data in items_data:
             item_id = item_data.get('id')
-            if item_id:
-                item_obj = Item.objects.filter(id=item_id, order=order).first()
-                if item_obj:
-                    cls._update_single_item(order, item_obj, item_data, user)
-                    keep_ids.append(item_obj.id)
+            
+            # Ищем товар в нашем словаре в памяти (работает мгновенно)
+            if item_id and item_id in existing_items:
+                item_obj = existing_items[item_id]
+                cls._update_single_item(order, item_obj, item_data, user)
+                keep_ids.append(item_obj.id)
             else:
                 if 'id' in item_data: del item_data['id']
                 new_item = Item.objects.create(order=order, **item_data)
                 keep_ids.append(new_item.id)
                 cls._log_history(order, user, f"Добавил товар: {new_item.name}")
                 
-                # 🔥 ИСПРАВЛЕНО: Проверяем и создаем шаблон при добавлении нового товара
                 cls._ensure_product_exists(new_item.name)
 
+        # Массовое удаление (здесь всё было сделано идеально: один bulk-запрос на удаление)
         items_to_delete = order.items.filter(is_archived=False).exclude(id__in=keep_ids)
         for del_item in items_to_delete:
             cls._log_history(order, user, f"Удалил товар: {del_item.name}")
@@ -85,7 +105,6 @@ class OrderService:
     def _update_single_item(cls, order: Order, item: Item, new_data: Dict[str, Any], user: User) -> None:
         changes = []
         
-        # 🔥 ИСПРАВЛЕНО: Проверяем смену названия и тоже обновляем шаблон, если нужно
         if 'name' in new_data and item.name != new_data['name']:
             changes.append(f"название '{item.name}' -> '{new_data['name']}'")
             cls._ensure_product_exists(new_data['name'])

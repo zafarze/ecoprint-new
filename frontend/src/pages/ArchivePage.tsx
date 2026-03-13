@@ -1,43 +1,27 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Archive, Search, RotateCcw, Calendar, Loader2, PackageOpen, History } from 'lucide-react';
+import toast from 'react-hot-toast'; // 🔥 ДОБАВИЛИ ИМПОРТ TOAST
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/Form';
+
+import api from '../api/api';
 
 export default function ArchivePage() {
 	const [archivedOrders, setArchivedOrders] = useState<any[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
-	const navigate = useNavigate();
 
 	const fetchArchive = async () => {
 		setIsLoading(true);
-		const token = localStorage.getItem('token');
-
-		if (!token) {
-			navigate('/login');
-			return;
-		}
-
 		try {
-			// ИЗМЕНЕНО: Используем переменную окружения
-			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/?is_archived=true`, {
-				headers: { 'Authorization': `Bearer ${token}` }
-			});
-
-			if (res.status === 401) {
-				localStorage.removeItem('token');
-				navigate('/login');
-				return;
-			}
-
-			if (res.ok) {
-				const data = await res.json();
-				setArchivedOrders(data);
-			}
+			const res = await api.get('orders/?is_archived=true');
+			const data = res.data;
+			const ordersArray = Array.isArray(data) ? data : (data.results || []);
+			setArchivedOrders(ordersArray);
 		} catch (err) {
-			console.error("Ошибка сети:", err);
+			console.error("Ошибка сети при загрузке архива:", err);
+			toast.error("Не удалось загрузить архив"); // 🔥 Уведомление об ошибке
 		} finally {
 			setIsLoading(false);
 		}
@@ -45,30 +29,21 @@ export default function ArchivePage() {
 
 	useEffect(() => {
 		fetchArchive();
-	}, [navigate]);
+	}, []);
 
 	const handleRestore = async (id: number) => {
 		if (!window.confirm('Восстановить заказ и вернуть его в работу?')) return;
 
-		const token = localStorage.getItem('token');
+		const restoreToast = toast.loading('Восстановление...');
 		try {
-			// ИЗМЕНЕНО: Используем переменную окружения
-			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${id}/`, {
-				method: 'PATCH',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${token}`
-				},
-				body: JSON.stringify({ is_archived: false })
-			});
-
-			if (res.ok) {
-				fetchArchive(); // Обновляем список архива
-			} else {
-				alert("Ошибка при восстановлении");
-			}
+			// 🔥 Вызываем команду восстановления
+			await api.post(`orders/${id}/unarchive/`);
+			toast.success('Заказ успешно возвращен в работу!', { id: restoreToast });
+			fetchArchive();
+			window.dispatchEvent(new Event('orders-updated'));
 		} catch (err) {
-			console.error("Ошибка:", err);
+			console.error("Ошибка при восстановлении:", err);
+			toast.error("Ошибка при восстановлении заказа", { id: restoreToast });
 		}
 	};
 
@@ -78,7 +53,6 @@ export default function ArchivePage() {
 		return date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
 	};
 
-	// Простая фильтрация на фронтенде для красоты (по клиенту или ID)
 	const filteredOrders = archivedOrders.filter(order =>
 		order.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
 		order.id.toString().includes(searchQuery)
@@ -86,7 +60,6 @@ export default function ArchivePage() {
 
 	return (
 		<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-
 			{/* Шапка страницы */}
 			<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 				<div>

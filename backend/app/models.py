@@ -23,12 +23,14 @@ class Order(models.Model):
     )
     is_received = models.BooleanField(default=False, verbose_name="Получен клиентом")
     
-    # Поле для архива (оно используется в фильтрах на фронтенде)
+    # 🔥 НОВОЕ ПОЛЕ: Точная дата и время выдачи заказа
+    received_at = models.DateTimeField(null=True, blank=True, verbose_name="Дата выдачи")
+    
+    # Поле для архива
     is_archived = models.BooleanField(default=False, verbose_name="В архиве") 
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
-    # НОВОЕ ПОЛЕ: Автоматически обновляется при каждом сохранении заказа
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен") 
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
 
     class Meta:
         verbose_name = "Заказ"

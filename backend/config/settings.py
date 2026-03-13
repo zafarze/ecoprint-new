@@ -151,8 +151,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ==========================================
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    # Добавили твой домен на Firebase!
+    "http://127.0.0.1:5173","http://localhost:5174",
+    "http://127.0.0.1:5174",
     "https://ecoprint-app.web.app",
     "https://ecoprint-app.firebaseapp.com"
 ]
@@ -168,12 +168,15 @@ CORS_ALLOW_HEADERS = [
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20, # Выдавать по 20 заказов за раз
-}
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), 
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'AUTH_HEADER_TYPES': ('Bearer',),
+    
+    # 🔥 ДОБАВЛЕНО: Говорим DRF использовать JWT токены для авторизации
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    # По умолчанию закрываем все эндпоинты, кроме тех, где явно разрешено
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    )
 }
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
