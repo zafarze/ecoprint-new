@@ -2,7 +2,7 @@ import os
 import threading
 import gspread
 from datetime import date, timedelta
-
+from .models import Order, Item, Product, CompanySettings, TelegramSettings, OrderHistory
 from django.db import transaction  # 🔥 ДОБАВЛЕНО: для защиты базы данных (транзакции)
 from django.utils import timezone
 from django.conf import settings
@@ -56,9 +56,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             is_archived_bool = is_archived.lower() == 'true'
             queryset = queryset.filter(is_archived=is_archived_bool)
             
-        if self.action == 'list':
-            return queryset.prefetch_related('items__responsible_user')
-            
+        # 🔥 ИСПРАВЛЕНО: Теперь история всегда подгружается вместе с заказами
         return queryset.prefetch_related('items__responsible_user', 'history__user')
 
     def get_serializer_context(self):
@@ -143,7 +141,19 @@ class ItemViewSet(viewsets.ModelViewSet):
         return ItemSerializer
 
     def perform_update(self, serializer):
+        new_status = serializer.validated_data.get('status')
         item = serializer.save()
+        
+        # 🔥 ДОБАВЛЕНО: Логируем быстрые клики по статусам из таблицы
+        if new_status:
+            request = self.request
+            user = request.user if request and request.user.is_authenticated else None
+            OrderHistory.objects.create(
+                order=item.order,
+                user=user,
+                message=f"Изменил статус '{item.name}' на '{item.get_status_display()}'"
+            )
+
         if hasattr(item.order, 'update_status'):
             item.order.update_status()
 

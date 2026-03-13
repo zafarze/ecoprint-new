@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
 	Trash2, Plus, Save, User, Package, CheckCircle2,
-	LayoutList, History, MessageSquare, Briefcase
+	LayoutList, History, MessageSquare, Briefcase, ChevronDown
 } from 'lucide-react';
 import BaseModal from '../components/ui/BaseModal';
 import Button from '../components/ui/Button';
@@ -17,6 +17,9 @@ interface OrderModalProps {
 }
 
 export default function OrderModal({ isOpen, onClose, onSave, initialData }: OrderModalProps) {
+	// 🔥 Состояние для скрытия/раскрытия истории
+	const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
 	// 🛠 ПУНКТ 4b: Получаем текущего пользователя и его имя
 	const getCurrentUser = () => {
 		const userStr = localStorage.getItem('user');
@@ -195,21 +198,40 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 					<Button type="button" variant="outline" icon={<Plus size={18} />} className="w-full mt-4 border-dashed border-slate-300 bg-slate-50 hover:bg-white text-slate-600 hover:text-primary" onClick={addItem}>Добавить товары в заказ</Button>
 				</div>
 
-				{/* 🛠 ПУНКТ 4c: История Изменений (Открыта и оформлена по макету) */}
+				{/* 🛠 ПУНКТ 4c: История Изменений (РАСКЛАДНАЯ) */}
 				{initialData && initialData.history && initialData.history.length > 0 && (
-					<div className="mx-1 mt-8 mb-4">
-						<h3 className="flex items-center gap-2 text-slate-700 font-black mb-4 text-base border-b border-slate-200 pb-3">
-							<History size={18} /> История изменений
-						</h3>
-						<div className="pl-4 border-l-2 border-slate-200 space-y-5 bg-slate-50/50 p-4 rounded-r-2xl">
-							{initialData.history.map((entry: any, idx: number) => (
-								<div key={idx} className="relative">
-									<div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-slate-300 border-[3px] border-white shadow-sm"></div>
-									<p className="text-xs text-slate-400 font-bold mb-1">{formatDate(entry.created_at_formatted || entry.created_at)} • <span className="text-primary">{entry.user_name || 'Система'}</span></p>
-									<p className="text-sm text-slate-700 font-medium bg-white p-3 rounded-xl border border-slate-100 shadow-sm inline-block">{entry.message}</p>
+					<div className="mx-1 mt-8 mb-4 bg-slate-50/50 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+						<button
+							type="button"
+							onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+							className="w-full flex items-center justify-between p-4 hover:bg-slate-100 transition-colors"
+						>
+							<div className="flex items-center gap-2 text-slate-700 font-black text-sm uppercase tracking-wider">
+								<History size={18} className="text-slate-500" /> История изменений ({initialData.history.length})
+							</div>
+							<ChevronDown
+								size={20}
+								className={`text-slate-400 transition-transform duration-300 ${isHistoryOpen ? 'rotate-180' : ''}`}
+							/>
+						</button>
+
+						{isHistoryOpen && (
+							<div className="p-5 border-t border-slate-200 bg-slate-50/30">
+								<div className="pl-4 border-l-2 border-slate-200 space-y-5">
+									{initialData.history.map((entry: any, idx: number) => (
+										<div key={idx} className="relative">
+											<div className="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-slate-300 border-[3px] border-slate-50 shadow-sm"></div>
+											<p className="text-xs text-slate-400 font-bold mb-1">
+												{formatDate(entry.created_at_formatted || entry.created_at)} • <span className="text-primary">{entry.user_name || 'Система'}</span>
+											</p>
+											<p className="text-sm text-slate-700 font-medium bg-white p-3 rounded-xl border border-slate-200 shadow-sm inline-block">
+												{entry.message}
+											</p>
+										</div>
+									))}
 								</div>
-							))}
-						</div>
+							</div>
+						)}
 					</div>
 				)}
 

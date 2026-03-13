@@ -84,11 +84,14 @@ class BaseOrderSerializer(serializers.ModelSerializer):
 
 # 🔥 СЕРИАЛИЗАТОР СПИСКА: Наследует get_items из BaseOrderSerializer
 class OrderListSerializer(BaseOrderSerializer):
+    # 🔥 ДОБАВЛЕНО: Подключаем историю к списку заказов
+    history = OrderHistorySerializer(many=True, read_only=True)
+
     class Meta:
         model = Order
         fields = [
             'id', 'client', 'client_phone', 'status', 'is_received', 'is_archived', 
-            'created_at', 'updated_at', 'items'
+            'created_at', 'updated_at', 'items', 'history' # 🔥 ДОБАВЛЕНО 'history' сюда
         ]
         read_only_fields = ['status']
 
