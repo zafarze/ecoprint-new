@@ -98,6 +98,15 @@ class OrderViewSet(viewsets.ModelViewSet):
             'message': f'{len(order_ids)} заказов автоматически отправлено в архив.'
         })
 
+    def partial_update(self, request, *args, **kwargs):
+        # 🔥 Авто-проставляем received_at при выдаче заказа
+        if 'is_received' in request.data:
+            if request.data['is_received'] in [True, 'true', 1]:
+                request.data['received_at'] = timezone.now().isoformat()
+            else:
+                request.data['received_at'] = None
+        return super().partial_update(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
         try:

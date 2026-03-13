@@ -423,7 +423,7 @@ export default function OrdersPage() {
 
 																		<div className="flex flex-col text-[10px] font-bold ml-1 sm:ml-2 border-l border-slate-200/50 pl-3.5 space-y-0.5">
 																			<div className="flex items-center gap-1.5 text-slate-500"><PlayCircle size={12} /> {order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}</div>
-																			<div className={`flex items-center gap-1.5 ${getDeadlineStyles(item.deadline)}`}><Flag size={12} /> {item.deadline ? new Date(item.deadline).toLocaleDateString() : '—'}</div>
+																			<div className={`flex items-center gap-1.5 ${getDeadlineStyles(item.deadline)}`}><Flag size={12} /> {item.deadline ? new Date(item.deadline).toLocaleDateString('ru-RU') : '—'}</div>
 																		</div>
 
 																		<div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-700 ml-4 bg-white/70 px-2.5 py-1.5 rounded-lg border border-slate-100/80 shadow-inner">

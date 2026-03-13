@@ -90,8 +90,8 @@ class OrderListSerializer(BaseOrderSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'client', 'client_phone', 'status', 'is_received', 'is_archived', 
-            'created_at', 'updated_at', 'items', 'history' # 🔥 ДОБАВЛЕНО 'history' сюда
+            'id', 'client', 'client_phone', 'status', 'is_received', 'received_at', 'is_archived', 
+            'created_at', 'updated_at', 'items', 'history'
         ]
         read_only_fields = ['status']
 
@@ -104,7 +104,7 @@ class OrderSerializer(BaseOrderSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'client', 'client_phone', 'status', 'is_received', 'is_archived', 
+            'id', 'client', 'client_phone', 'status', 'is_received', 'received_at', 'is_archived', 
             'created_at', 'updated_at', 'items', 'items_write', 'history'
         ]
         read_only_fields = ['status']
