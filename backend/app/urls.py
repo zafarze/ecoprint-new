@@ -26,6 +26,7 @@ urlpatterns = [
     
     path('statistics-data/', views.statistics_data_view, name='app-statistics-data'),
     path('sync-sheets/', views.sync_to_google_sheets, name='app-sync-sheets'),
+    path('webhook-sync-sheets/', views.sync_sheets_webhook, name='app-webhook-sync-sheets'),
     path('ai-chat/', views.chat_with_ai, name='app-ai-chat'),
     
     # Пути настроек теперь находятся там, где нужно:

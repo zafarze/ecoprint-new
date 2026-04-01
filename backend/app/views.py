@@ -363,6 +363,62 @@ def sync_to_google_sheets(request):
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
+@api_view(['POST', 'GET'])
+def sync_sheets_webhook(request):
+    """
+    Вебхук для автоматического запуска (например, через Google Cloud Scheduler).
+    Не требует JWT токена менеджера, требует только секретный ключ.
+    """
+    secret = request.GET.get('secret')
+    expected_secret = os.environ.get('CRON_SECRET', 'ecoprint_secret_cron_job_2026')
+    
+    if secret != expected_secret:
+        return Response({'error': 'Invalid secret key'}, status=403)
+        
+    # Код синхронизации аналогичен верхней функции
+    try:
+        service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
+        if not os.path.exists(service_account_path):
+            return Response({'error': 'Файл service_account.json не найден!'}, status=400)
+
+        gc = gspread.service_account(filename=service_account_path)
+        sheet_id = os.environ.get('GOOGLE_SHEET_ID')
+        
+        if not sheet_id:
+             sheet_name = os.environ.get('GOOGLE_SHEET_NAME', 'EcoPrint Orders')
+             try:
+                 sh = gc.open(sheet_name)
+             except gspread.SpreadsheetNotFound:
+                 return Response({'error': f'Таблица "{sheet_name}" не найдена.'}, status=404)
+        else:
+             sh = gc.open_by_key(sheet_id)
+        
+        worksheet = sh.sheet1 
+        cutoff_date = timezone.now() - timedelta(days=90)
+        orders = Order.objects.filter(created_at__gte=cutoff_date).prefetch_related('items__responsible_user').order_by('-created_at')
+        
+        data = [['ID', 'Клиент', 'Дата', 'Статус заказа', 'Товар', 'Кол-во', 'Дедлайн', 'Статус товара', 'Ответственный', 'Комментарий']]
+
+        for order in orders.iterator(chunk_size=1000):
+            created_date = order.created_at.strftime("%d.%m.%Y %H:%M")
+            if not order.items.exists():
+                data.append([order.id, order.client, created_date, order.get_status_display(), "-", "-", "-", "-", "-", "-"])
+                continue
+
+            for item in order.items.all():
+                resp_user = "Нет"
+                if item.responsible_user:
+                    resp_user = item.responsible_user.first_name or item.responsible_user.username
+                deadline = item.deadline.strftime("%d.%m.%Y") if item.deadline else "-"
+                row = [order.id, order.client, created_date, order.get_status_display(), item.name, item.quantity, deadline, item.get_status_display(), resp_user, item.comment]
+                data.append(row)
+
+        worksheet.clear()
+        worksheet.update(data)
+        return Response({'status': 'success', 'message': f'Авто-выгрузка успешна. Строк: {len(data)-1}'})
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 class CompanySettingsAPIView(APIView):
     permission_classes = [IsSuperAdmin] # 🔥 Доступ к настройкам компании только у админа
