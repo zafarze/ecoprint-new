@@ -319,11 +319,17 @@ def statistics_data_view(request):
 @permission_classes([IsManagerOrAdmin]) # 🔥 Синхронизация для менеджеров и админов
 def sync_to_google_sheets(request):
     try:
-        service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
-        if not os.path.exists(service_account_path):
-            return Response({'error': 'Файл service_account.json не найден!'}, status=400)
-
-        gc = gspread.service_account(filename=service_account_path)
+        import json
+        google_creds_json = os.environ.get('GOOGLE_CREDS_JSON')
+        if google_creds_json:
+            creds_dict = json.loads(google_creds_json)
+            gc = gspread.service_account_from_dict(creds_dict)
+        else:
+            service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
+            if not os.path.exists(service_account_path):
+                return Response({'error': 'Файл service_account.json не найден!'}, status=400)
+            gc = gspread.service_account(filename=service_account_path)
+            
         sheet_id = os.environ.get('GOOGLE_SHEET_ID')
         
         if not sheet_id:
@@ -378,11 +384,17 @@ def sync_sheets_webhook(request):
         
     # Код синхронизации аналогичен верхней функции
     try:
-        service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
-        if not os.path.exists(service_account_path):
-            return Response({'error': 'Файл service_account.json не найден!'}, status=400)
-
-        gc = gspread.service_account(filename=service_account_path)
+        import json
+        google_creds_json = os.environ.get('GOOGLE_CREDS_JSON')
+        if google_creds_json:
+            creds_dict = json.loads(google_creds_json)
+            gc = gspread.service_account_from_dict(creds_dict)
+        else:
+            service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
+            if not os.path.exists(service_account_path):
+                return Response({'error': 'Файл service_account.json не найден!'}, status=400)
+            gc = gspread.service_account(filename=service_account_path)
+            
         sheet_id = os.environ.get('GOOGLE_SHEET_ID')
         
         if not sheet_id:
