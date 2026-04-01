@@ -41,6 +41,11 @@ const getLocalDateStr = (offsetDays = 0) => {
 };
 
 export default function OrdersPage() {
+	const userStr = localStorage.getItem('user');
+	const user = userStr ? JSON.parse(userStr) : null;
+	const userRole = user?.role || 'worker';
+	const canIssueOrders = userRole === 'manager' || userRole === 'superadmin' || userRole === 'admin';
+
 	const [orders, setOrders] = useState<any[]>([]);
 	const [allProducts, setAllProducts] = useState<any[]>([]);
 
@@ -164,7 +169,7 @@ export default function OrdersPage() {
 
 	const handleSaveOrder = async (orderData: any) => {
 		const saveToast = toast.loading('Сохранение...');
-		
+
 		// 1. ОПТИМИСТИКА: Мгновенно закрываем модальное окно, не ждем сервер!
 		setIsModalOpen(false);
 
@@ -187,7 +192,7 @@ export default function OrdersPage() {
 					deadline: i.deadline,
 					status: i.status || 'not-ready',
 					comment: i.comment || '',
-					responsible_user: { first_name: 'Сохранение...' } 
+					responsible_user: { first_name: 'Сохранение...' }
 				}))
 			};
 			setOrders(prev => [fakeOrder, ...prev]);
@@ -206,7 +211,7 @@ export default function OrdersPage() {
 				// Меняем наш фейковый ID на настоящий из Базы Данных
 				setOrders(prev => prev.map(o => o.id === fakeId ? savedOrder : o));
 			}
-			
+
 			toast.success('Успешно!', { id: saveToast });
 			notifyHeader();
 		} catch (e) {
@@ -241,7 +246,7 @@ export default function OrdersPage() {
 		// ОПТИМИСТИЧНЫЙ UI: Сначала закрываем окно и моментально удаляем карточку
 		const previousOrders = [...orders];
 		const targetId = orderToDelete.id;
-		
+
 		setOrders(prev => prev.filter(o => o.id !== targetId));
 		setIsDeleteModalOpen(false);
 		toast.success('Удалено');
@@ -533,9 +538,18 @@ export default function OrdersPage() {
 													<span className="px-4 py-2 rounded-full text-xs font-black bg-slate-200 text-slate-700 uppercase shadow-sm">Не готов</span>
 												)}
 
-												<button onClick={() => handleToggleReceived(order)} className={`w-full max-w-[140px] flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold border transition-colors ${order.is_received ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm hover:bg-emerald-600' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}>
-													{order.is_received ? <><CheckSquare size={14} /> Выдан</> : <><Square size={14} /> В офисе</>}
-												</button>
+												{order.status === 'ready' && canIssueOrders && (
+													<button 
+														onClick={() => handleToggleReceived(order)} 
+														className={`w-full max-w-[150px] flex items-center justify-center py-2.5 px-3 rounded-full text-[11px] font-black uppercase tracking-wider transition-all shadow-sm ${
+															order.is_received 
+															? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
+															: 'bg-rose-100 text-rose-600 hover:bg-rose-200'
+														}`}
+													>
+														{order.is_received ? 'Клиент получил' : 'Готова к выдачу'}
+													</button>
+												)}
 											</td>
 
 											<td className="px-6 py-6 align-top">
