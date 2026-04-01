@@ -526,30 +526,32 @@ export default function OrdersPage() {
 												</div>
 											</td>
 
-											<td className="px-6 py-6 align-top text-center flex flex-col items-center gap-3">
-												{/* Общий статус заказа с учетом просрочки */}
-												{order.status === 'ready' ? (
-													<span className="px-4 py-2 rounded-full text-xs font-black bg-emerald-100 text-emerald-700 uppercase shadow-sm">Готово</span>
-												) : isOrderOverdue ? (
-													<span className="px-4 py-2 rounded-full text-xs font-black bg-rose-100 text-rose-700 uppercase shadow-sm animate-pulse">Просрочено</span>
-												) : order.status === 'in-progress' ? (
-													<span className="px-4 py-2 rounded-full text-xs font-black bg-orange-100 text-orange-600 uppercase shadow-sm">В процессе</span>
-												) : (
-													<span className="px-4 py-2 rounded-full text-xs font-black bg-slate-200 text-slate-700 uppercase shadow-sm">Не готов</span>
-												)}
+											<td className="px-6 py-4 align-middle text-center">
+												<div className="flex flex-col items-center justify-center gap-1.5">
+													{/* Общий статус заказа с учетом просрочки */}
+													{order.status === 'ready' ? (
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 uppercase">Готово</span>
+													) : isOrderOverdue ? (
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 uppercase animate-pulse">Просрочено</span>
+													) : order.status === 'in-progress' ? (
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-orange-100 text-orange-600 uppercase">В процессе</span>
+													) : (
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 uppercase">Не готов</span>
+													)}
 
-												{order.status === 'ready' && canIssueOrders && (
-													<button 
-														onClick={() => handleToggleReceived(order)} 
-														className={`w-full max-w-[150px] flex items-center justify-center py-2.5 px-3 rounded-full text-[11px] font-black uppercase tracking-wider transition-all shadow-sm ${
-															order.is_received 
-															? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
-															: 'bg-rose-100 text-rose-600 hover:bg-rose-200'
-														}`}
-													>
-														{order.is_received ? 'Клиент получил' : 'Готова к выдачу'}
-													</button>
-												)}
+													{order.status === 'ready' && canIssueOrders && (
+														<button 
+															onClick={() => handleToggleReceived(order)} 
+															className={`px-3 py-1 rounded-full text-[11px] font-bold transition-colors shadow-sm ${
+																order.is_received 
+																? 'bg-emerald-100/50 text-emerald-800 hover:bg-emerald-200 border border-emerald-200/50' 
+																: 'bg-rose-200/50 text-rose-700 hover:bg-rose-200 border border-rose-300/30'
+															}`}
+														>
+															{order.is_received ? 'Клиент получил' : 'Готова к выдачу'}
+														</button>
+													)}
+												</div>
 											</td>
 
 											<td className="px-6 py-6 align-top">
