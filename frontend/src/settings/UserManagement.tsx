@@ -19,14 +19,18 @@ export default function UserManagement() {
 
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 	const [userToDelete, setUserToDelete] = useState<any>(null);
+	const [isLoading, setIsLoading] = useState(true);
 
 	const loadUsers = async () => {
 		try {
+			setIsLoading(true);
 			const res = await api.get('/users/');
 			setUsers(res.data);
 		} catch (err) {
 			console.error("Ошибка загрузки пользователей:", err);
 			toast.error("Не удалось загрузить сотрудников");
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
@@ -99,8 +103,18 @@ export default function UserManagement() {
 								<th className="px-6 py-4 text-right rounded-tr-3xl">Действия</th>
 							</tr>
 						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{users.map(u => (
+						<tbody className="divide-y divide-slate-100 relative">
+							{isLoading && (
+								<tr>
+									<td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-bold">
+										<div className="flex justify-center items-center gap-3">
+											<div className="w-5 h-5 border-4 border-slate-300 border-t-primary rounded-full animate-spin"></div>
+											Загрузка сотрудников...
+										</div>
+									</td>
+								</tr>
+							)}
+							{!isLoading && users.map(u => (
 								<tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
 									<td className="px-6 py-4">
 										<div className="flex items-center gap-3">

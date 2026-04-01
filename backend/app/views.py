@@ -209,7 +209,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSuperAdmin] # 🔥 Строго для админа
-    queryset = User.objects.filter(is_active=True).order_by('first_name')
+    queryset = User.objects.select_related('profile').filter(is_active=True).order_by('first_name')
     pagination_class = None
 
     def get_serializer_class(self):
