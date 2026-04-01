@@ -149,7 +149,7 @@ export default function ArchivePage() {
 											</div>
 										</td>
 										<td className="px-6 py-4 text-center">
-											<span className="px-3 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-500 uppercase tracking-widest border border-slate-200">
+											<span className="px-3 py-1 rounded-full text-[10px] whitespace-nowrap font-black bg-slate-100 text-slate-500 uppercase tracking-widest border border-slate-200">
 												В архиве
 											</span>
 										</td>
