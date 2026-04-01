@@ -542,7 +542,7 @@ export default function OrdersPage() {
 													{order.status === 'ready' && canIssueOrders && (
 														<button 
 															onClick={() => handleToggleReceived(order)} 
-															className={`px-3 py-1 rounded-full text-[11px] font-bold transition-colors shadow-sm ${
+															className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[11px] font-bold transition-colors shadow-sm ${
 																order.is_received 
 																? 'bg-emerald-100/50 text-emerald-800 hover:bg-emerald-200 border border-emerald-200/50' 
 																: 'bg-rose-200/50 text-rose-700 hover:bg-rose-200 border border-rose-300/30'
