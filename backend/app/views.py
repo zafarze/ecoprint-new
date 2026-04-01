@@ -507,3 +507,57 @@ def change_password(request):
     user.set_password(new_password)
     user.save()
     return Response({'message': 'Пароль успешно изменен'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def notification_settings(request):
+    profile = request.user.profile
+    if request.method == 'GET':
+        return Response({
+            'sound_notifications': profile.sound_notifications,
+            'popup_notifications': profile.popup_notifications,
+            'day_before_notifications': profile.day_before_notifications
+        })
+    elif request.method == 'POST':
+        profile.sound_notifications = request.data.get('sound_notifications', profile.sound_notifications)
+        profile.popup_notifications = request.data.get('popup_notifications', profile.popup_notifications)
+        profile.day_before_notifications = request.data.get('day_before_notifications', profile.day_before_notifications)
+        profile.save()
+        return Response({'message': 'Настройки сохранены'})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def poll_new_orders(request):
+    last_id = request.query_params.get('last_id')
+    if not last_id or not last_id.isdigit():
+        latest = Order.objects.order_by('-id').first()
+        return Response({'has_new': False, 'latest_id': latest.id if latest else 0})
+        
+    last_id = int(last_id)
+    latest_orders = Order.objects.filter(id__gt=last_id).order_by('-id')
+    if latest_orders.exists():
+        new_orders_data = [{'id': o.id, 'client': o.client} for o in latest_orders[:3]]
+        return Response({
+            'has_new': True, 
+            'latest_id': latest_orders.first().id,
+            'new_orders': new_orders_data
+        })
+    return Response({'has_new': False, 'latest_id': last_id})
+
+from .telegram_bot import send_daily_deadline_reminders
+from rest_framework.decorators import permission_classes
+from rest_framework.permissions import AllowAny
+import os
+
+@api_view(['POST', 'GET'])
+@permission_classes([AllowAny])
+def webhook_daily_reminders(request):
+    incoming_secret = request.data.get('secret') or request.query_params.get('secret')
+    expected_secret = os.environ.get('CRON_SECRET', 'ecoprint_secret_cron_job_2026')
+    
+    if incoming_secret != expected_secret:
+        return Response({'error': 'Unauthorized cron'}, status=403)
+        
+    send_daily_deadline_reminders()
+    return Response({'status': 'Daily reminders triggered'})

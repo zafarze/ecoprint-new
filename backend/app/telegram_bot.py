@@ -71,3 +71,59 @@ def send_telegram_notification(order):
         thread.start()
     except Exception as e:
         print(f"❌ Ошибка при формировании уведомления: {e}")
+
+import datetime
+from django.utils import timezone
+from .models import Item
+
+def send_daily_deadline_reminders():
+    try:
+        settings = TelegramSettings.objects.first()
+        if not settings or not settings.bot_token or not settings.chat_id:
+            print("Telegram reminder canceled: token or chat_id not set.")
+            return
+
+        bot_token = settings.bot_token
+        chat_id = settings.chat_id
+
+        tomorrow = timezone.now().date() + datetime.timedelta(days=1)
+        items_due_tomorrow = Item.objects.filter(
+            status__in=['not-ready', 'in-progress'],
+            deadline=tomorrow
+        ).select_related('order', 'responsible_user')
+
+        if not items_due_tomorrow.exists():
+            print("Завтра дедлайнов нет.")
+            return
+
+        message_text = (
+            f"<b>⚠️ Горящие дедлайны (на завтра, {tomorrow.strftime('%d.%m')})</b>\n"
+            f"➖➖➖➖➖➖➖➖➖➖\n"
+        )
+
+        for i, item in enumerate(items_due_tomorrow, 1):
+            client = html.escape(item.order.client)
+            item_name = html.escape(item.name)
+            resp = "Не назначен"
+            if item.responsible_user:
+                resp = html.escape(f"{item.responsible_user.first_name} {item.responsible_user.last_name}".strip() or item.responsible_user.username)
+            
+            message_text += (
+                f"<b>{i}. {item_name}</b> ({item.quantity} шт.)\n"
+                f"   👤 Клиент: {client}\n"
+                f"   👷 Ответственный: {resp}\n\n"
+            )
+            
+        message_text += f"➖➖➖➖➖➖➖➖➖➖\n<i>🤖 Напоминание EcoPrint CRM</i>"
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {'chat_id': chat_id, 'text': message_text, 'parse_mode': 'HTML'}
+        response = requests.post(url, data=payload, timeout=10)
+        
+        if response.status_code != 200:
+            print(f"❌ Ошибка отправки напоминаний в Telegram: {response.text}")
+        else:
+            print("Успешно отправлено напоминание о дедлайнах.")
+            
+    except Exception as e:
+        print(f"❌ Сбой при рассылке напоминаний: {e}")

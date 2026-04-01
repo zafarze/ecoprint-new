@@ -1,6 +1,5 @@
-// src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 
 import Layout from './components/Layout';
 import OrdersPage from './pages/OrdersPage';
@@ -20,6 +19,59 @@ import ProductManagement from './settings/ProductManagement';
 import UserManagement from './settings/UserManagement';
 
 import '@fortawesome/fontawesome-free/css/all.min.css';
+import { useEffect } from 'react';
+import api from './api/api';
+
+// === ГЛОБАЛЬНЫЙ НАБЛЮДАТЕЛЬ ЗА НОВЫМИ ЗАКАЗАМИ ===
+const GlobalObserver = () => {
+  useEffect(() => {
+    let lastOrderIdStr = localStorage.getItem('last_known_order_id');
+    
+    // Каждые 15 секунд тихо спрашиваем сервер, есть ли новые заказы
+    const interval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token || token === 'undefined') return;
+
+        const settingsStr = localStorage.getItem('notify_settings');
+        // Если настроек нет, считаем что разрешено
+        const settings = settingsStr ? JSON.parse(settingsStr) : { sound: true, popup: true };
+
+        // Если мы только что вошли и last_id нет в локалсторадже, 
+        // сервер вернет has_new: false, но выдаст актуальный latest_id
+        const res = await api.get(`/orders/poll/?last_id=${lastOrderIdStr || 0}`);
+        const { has_new, latest_id, new_orders } = res.data;
+
+        if (latest_id) {
+            localStorage.setItem('last_known_order_id', latest_id.toString());
+            lastOrderIdStr = latest_id.toString();
+        }
+
+        if (has_new && new_orders && new_orders.length > 0) {
+           // Звук
+           if (settings.sound) {
+               const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+               audio.volume = 0.5;
+               audio.play().catch(e => console.error("Звук заблокирован политикой автоплея:", e));
+           }
+
+           // Всплывающие окна
+           if (settings.popup) {
+               new_orders.forEach((o: any) => {
+                   toast.success(`Новый заказ: ${o.client} (№${o.id})!`, { icon: '🔥', duration: 10000 });
+               });
+           }
+        }
+      } catch (err) {
+         // Молча игнорируем сетевые ошибки, чтобы не спамить в консоль
+      }
+    }, 15000); 
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return null;
+}
 
 // === ЗАЩИТНИК МАРШРУТОВ (Protected Route) ===
 const RequireAuth = () => {
@@ -27,7 +79,12 @@ const RequireAuth = () => {
   if (!token) {
     return <Navigate to="/login" replace />;
   }
-  return <Outlet />; 
+  return (
+    <>
+      <GlobalObserver />
+      <Outlet />
+    </>
+  ); 
 };
 
 // === РОЛЕВОЙ ЗАЩИТНИК (RBAC Route) ===

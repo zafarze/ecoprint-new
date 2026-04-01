@@ -1,16 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BellRing, Save } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import toast from 'react-hot-toast';
+import api from '../api/api';
 
 export default function NotificationSettings() {
 	const [soundEnabled, setSoundEnabled] = useState(true);
 	const [popupEnabled, setPopupEnabled] = useState(true);
 	const [dayBefore, setDayBefore] = useState(true);
+	const [isLoading, setIsLoading] = useState(true);
 
-	const handleSubmit = (e: React.FormEvent) => {
+	useEffect(() => {
+		async function fetchSettings() {
+			try {
+				const response = await api.get('/settings/notifications/');
+				const data = response.data;
+				setSoundEnabled(data.sound_notifications);
+				setPopupEnabled(data.popup_notifications);
+				setDayBefore(data.day_before_notifications);
+				
+				// Также сохраняем настройки в localStorage для глобального поллинга
+				localStorage.setItem('notify_settings', JSON.stringify({
+					sound: data.sound_notifications,
+					popup: data.popup_notifications
+				}));
+			} catch (error) {
+				console.error('Ошибка загрузки настроек уведомлений:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		}
+		fetchSettings();
+	}, []);
+
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		alert("Настройки уведомлений сохранены!");
+		try {
+			await api.post('/settings/notifications/', {
+				sound_notifications: soundEnabled,
+				popup_notifications: popupEnabled,
+				day_before_notifications: dayBefore
+			});
+			
+			// Синхронизируем с localStorage
+			localStorage.setItem('notify_settings', JSON.stringify({
+				sound: soundEnabled,
+				popup: popupEnabled
+			}));
+			
+			toast.success("Настройки уведомлений успешно сохранены!");
+		} catch (error) {
+			toast.error("Не удалось сохранить настройки");
+		}
 	};
 
 	// Компонент красивого переключателя (Toggle)
@@ -40,8 +82,8 @@ export default function NotificationSettings() {
 					<Toggle label="Напоминание за день до дедлайна" checked={dayBefore} onChange={setDayBefore} />
 
 					<div className="pt-6 mt-6 border-t border-slate-100 flex justify-end">
-						<Button type="submit" icon={<Save size={18} />}>
-							Сохранить настройки
+						<Button type="submit" disabled={isLoading} icon={<Save size={18} />}>
+							{isLoading ? "Загрузка..." : "Сохранить настройки"}
 						</Button>
 					</div>
 				</form>
