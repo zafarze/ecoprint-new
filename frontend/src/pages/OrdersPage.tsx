@@ -527,26 +527,30 @@ export default function OrdersPage() {
 											</td>
 
 											<td className="px-4 py-4 align-middle text-center">
-												<div className="flex flex-col items-center justify-center gap-1.5">
+												<div className="flex flex-col items-center justify-center gap-1.5 min-h-[64px] relative">
 													{/* Общий статус заказа с учетом просрочки */}
 													{order.status === 'ready' ? (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 uppercase whitespace-nowrap">Готово</span>
+														<span className="w-[100px] inline-flex items-center justify-center px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 uppercase whitespace-nowrap shadow-sm">Готово</span>
 													) : isOrderOverdue ? (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 uppercase animate-pulse whitespace-nowrap">Просрочено</span>
+														<span className="w-[100px] inline-flex items-center justify-center px-3 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 uppercase animate-pulse whitespace-nowrap shadow-sm">Просрочено</span>
 													) : order.status === 'in-progress' ? (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-orange-100 text-orange-600 uppercase whitespace-nowrap">В процессе</span>
+														<span className="w-[100px] inline-flex items-center justify-center px-3 py-1 rounded-full text-[11px] font-bold bg-orange-100 text-orange-600 uppercase whitespace-nowrap shadow-sm">В процессе</span>
 													) : (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 uppercase whitespace-nowrap">Не готов</span>
+														<span className="w-[100px] inline-flex items-center justify-center px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 uppercase whitespace-nowrap shadow-sm">Не готов</span>
 													)}
 
-													{order.status === 'ready' && canIssueOrders && (
+													{canIssueOrders && (
 														<button 
-															onClick={() => handleToggleReceived(order)} 
-															className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[11px] font-bold transition-colors shadow-sm ${
-																order.is_received 
-																? 'bg-emerald-100/50 text-emerald-800 hover:bg-emerald-200 border border-emerald-200/50' 
-																: 'bg-rose-200/50 text-rose-700 hover:bg-rose-200 border border-rose-300/30'
+															onClick={() => order.status === 'ready' && handleToggleReceived(order)} 
+															className={`whitespace-nowrap w-[130px] px-2 py-1.5 rounded-full text-[11px] font-bold transition-all shadow-sm ${
+																order.status === 'ready' 
+																? (order.is_received 
+																	? 'bg-emerald-100/50 text-emerald-800 hover:bg-emerald-200 border border-emerald-200/50' 
+																	: 'bg-rose-200/50 text-rose-700 hover:bg-rose-200 border border-rose-300/30')
+																: 'opacity-0 pointer-events-none cursor-default select-none'
 															}`}
+															tabIndex={order.status === 'ready' ? 0 : -1}
+															aria-hidden={order.status !== 'ready'}
 														>
 															{order.is_received ? 'Клиент получил' : 'Готова к выдачу'}
 														</button>
