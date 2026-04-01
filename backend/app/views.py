@@ -364,6 +364,7 @@ def sync_to_google_sheets(request):
         return Response({'error': str(e)}, status=500)
 
 @api_view(['POST', 'GET'])
+@permission_classes([permissions.AllowAny])
 def sync_sheets_webhook(request):
     """
     Вебхук для автоматического запуска (например, через Google Cloud Scheduler).
