@@ -29,7 +29,15 @@ export default function ProductsPage() {
 	const [productToDelete, setProductToDelete] = useState<any>(null);
 
 	const fetchProducts = async () => {
-		setIsLoading(true);
+		// 🔥 МАГИЯ КЭША
+		const cached = localStorage.getItem('cached_products');
+		if (cached) {
+			setProducts(JSON.parse(cached));
+			setIsLoading(false);
+		} else {
+			setIsLoading(true);
+		}
+
 		const token = localStorage.getItem('token');
 		try {
 			// ИЗМЕНЕНО: Используем переменную окружения
@@ -46,6 +54,8 @@ export default function ProductsPage() {
 
 			if (res.ok) {
 				const data = await res.json();
+				// Обновляем кэш и стейт
+				localStorage.setItem('cached_products', JSON.stringify(data));
 				setProducts(data);
 			}
 		} catch (err) {

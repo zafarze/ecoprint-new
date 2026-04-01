@@ -27,13 +27,24 @@ export default function StatisticsPage() {
 
 	useEffect(() => {
 		const fetchStats = async () => {
-			setIsLoading(true);
+			// 🔥 МАГИЯ КЭША: Если в браузере уже есть данные за этот период, моментально их показываем
+			const cacheKey = `cached_stats_${period}`;
+			const cached = localStorage.getItem(cacheKey);
+			
+			if (cached) {
+				setStats(JSON.parse(cached));
+				setIsLoading(false); // Выключаем лоадер МОМЕНТАЛЬНО (бабах!)
+			} else {
+				setIsLoading(true);
+			}
 
+			// Всегда тихо скачиваем свежие данные в фоне
 			try {
-				// 🔥 2. Магия api.ts: Короткий запрос! Токен и проверки на 401 работают под капотом.
+				// 🔥 Магия api.ts: Короткий запрос! Токен скрытно работает под капотом.
 				const res = await api.get(`statistics-data/?period=${period}`);
-
-				// Axios автоматически парсит JSON, данные лежат в свойстве .data
+				
+				// Обновляем кэш и страницу реальными данными
+				localStorage.setItem(cacheKey, JSON.stringify(res.data));
 				setStats(res.data);
 			} catch (err) {
 				console.error("Ошибка при загрузке статистики:", err);

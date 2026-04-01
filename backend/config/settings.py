@@ -179,4 +179,12 @@ REST_FRAMEWORK = {
     )
 }
 
+# 🔥 ДОБАВЛЕНО: Отключаем параноидальный авто-выход! 
+# Теперь токен живет 30 дней. Пользователь выходит только по кнопке "Выйти".
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=60),
+    'ROTATE_REFRESH_TOKENS': True,
+}
+
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')

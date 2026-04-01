@@ -12,13 +12,22 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 	// useNavigate нам больше не нужен для логаута, но мы его оставим, вдруг пригодится
 
 
-	const menuItems = [
-		{ path: '/', icon: Home, label: 'Главная' },
-		{ path: '/statistics', icon: BarChart2, label: 'Статистика' },
-		{ path: '/products', icon: Package, label: 'Товары' },
-		{ path: '/archive', icon: Archive, label: 'Архив заказов' },
-		{ path: '/settings', icon: Settings, label: 'Настройки' },
+	// Получаем текущую роль пользователя для бокового меню
+	const userStr = localStorage.getItem('user');
+	const user = userStr && userStr !== 'undefined' ? JSON.parse(userStr) : null;
+	const role = user?.role || 'worker'; // По умолчанию самые низкие права
+
+	// Настройка доступов: у какого пункта меню какая роль имеет доступ
+	const menuItemsData = [
+		{ path: '/', icon: Home, label: 'Главная', allowedRoles: ['superadmin', 'manager', 'worker'] },
+		{ path: '/statistics', icon: BarChart2, label: 'Статистика', allowedRoles: ['superadmin'] },
+		{ path: '/products', icon: Package, label: 'Товары', allowedRoles: ['superadmin', 'manager'] },
+		{ path: '/archive', icon: Archive, label: 'Архив заказов', allowedRoles: ['superadmin', 'manager'] },
+		{ path: '/settings', icon: Settings, label: 'Настройки', allowedRoles: ['superadmin'] },
 	];
+
+	// Фильтруем меню так, чтобы пользователь видел только то, что ему разрешено
+	const menuItems = menuItemsData.filter(item => item.allowedRoles.includes(role));
 
 	// 🔥 Изменили только эту функцию
 	const handleLogout = () => {

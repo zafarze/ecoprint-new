@@ -126,7 +126,22 @@ class Item(models.Model):
 
 # === Модель Профиля ===
 class Profile(models.Model):
+    ROLE_CHOICES = [
+        ('superadmin', 'Супер Админ'),
+        ('manager', 'Менеджер'),
+        ('worker', 'Работник'),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name="Пользователь")
+    
+    # 🔥 НОВОЕ ПОЛЕ РОЛЬ: Разграничение прав
+    role = models.CharField(
+        max_length=20, 
+        choices=ROLE_CHOICES, 
+        default='worker', 
+        verbose_name="Роль в системе"
+    )
+
     avatar = models.ImageField(
         upload_to='avatars/',
         default='avatars/default.jpg',

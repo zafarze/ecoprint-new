@@ -22,14 +22,28 @@ import UserManagement from './settings/UserManagement';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
 // === ЗАЩИТНИК МАРШРУТОВ (Protected Route) ===
-// Проверяет токен до того, как пустить пользователя к компонентам
 const RequireAuth = () => {
   const token = localStorage.getItem('token');
   if (!token) {
-    // Если токена нет, моментально перекидываем на логин, заменяя историю (replace)
     return <Navigate to="/login" replace />;
   }
-  return <Outlet />; // Если токен есть, рендерим вложенные маршруты
+  return <Outlet />; 
+};
+
+// === РОЛЕВОЙ ЗАЩИТНИК (RBAC Route) ===
+const RequireRole = ({ allowedRoles }: { allowedRoles: string[] }) => {
+  const userStr = localStorage.getItem('user');
+  const user = userStr && userStr !== 'undefined' ? JSON.parse(userStr) : null;
+  // По умолчанию предполагаем самую низкую роль (worker)
+  const role = user?.role || 'worker';
+  
+  if (!allowedRoles.includes(role)) {
+    // Всплывающее уведомление, что доступ запрещен
+    console.warn("Доступ запрещен. Роль:", role);
+    return <Navigate to="/" replace />;
+  }
+  
+  return <Outlet />;
 };
 
 function App() {
@@ -68,19 +82,28 @@ function App() {
           {/* Защищенные маршруты обернуты в RequireAuth */}
           <Route element={<RequireAuth />}>
             <Route path="/" element={<Layout />}>
+              {/* Свободные маршруты для всех (Главная страница) */}
               <Route index element={<OrdersPage />} />
-              <Route path="archive" element={<ArchivePage />} />
-              <Route path="statistics" element={<StatisticsPage />} />
-              <Route path="products" element={<ProductsPage />} />
 
-              {/* === ПРАВИЛЬНЫЙ РОУТИНГ НАСТРОЕК === */}
-              <Route path="settings" element={<SettingsLayout />}>
-                <Route index element={<SettingsPage />} /> {/* Главная страница настроек */}
-                <Route path="company" element={<CompanySettings />} />
-                <Route path="integrations" element={<IntegrationsSettings />} />
-                <Route path="notifications" element={<NotificationSettings />} />
-                <Route path="products" element={<ProductManagement />} />
-                <Route path="users" element={<UserManagement />} />
+              {/* Маршруты для Администраторов и Менеджеров */}
+              <Route element={<RequireRole allowedRoles={['superadmin', 'manager']} />}>
+                <Route path="archive" element={<ArchivePage />} />
+                <Route path="products" element={<ProductsPage />} />
+              </Route>
+
+              {/* Строго для Супер Администраторов */}
+              <Route element={<RequireRole allowedRoles={['superadmin']} />}>
+                <Route path="statistics" element={<StatisticsPage />} />
+                
+                {/* === ПРАВИЛЬНЫЙ РОУТИНГ НАСТРОЕК === */}
+                <Route path="settings" element={<SettingsLayout />}>
+                  <Route index element={<SettingsPage />} /> 
+                  <Route path="company" element={<CompanySettings />} />
+                  <Route path="integrations" element={<IntegrationsSettings />} />
+                  <Route path="notifications" element={<NotificationSettings />} />
+                  <Route path="products" element={<ProductManagement />} />
+                  <Route path="users" element={<UserManagement />} />
+                </Route>
               </Route>
 
               <Route path="profile" element={<ProfilePage />} />

@@ -80,27 +80,35 @@ export default function OrdersPage() {
 	const fetchOrdersSilently = async () => {
 		try {
 			const res = await api.get('orders/?is_archived=false');
-			const data = res.data;
-			setOrders(Array.isArray(data) ? data : (data.results || []));
+			const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
+			// Сохраняем свежие данные в кэш браузера и в стейт
+			localStorage.setItem('cached_orders', JSON.stringify(data));
+			setOrders(data);
 		} catch (err) {
 			console.error("Ошибка при загрузке заказов:", err);
 		}
 	};
 
 	const loadOrders = async () => {
-		setIsLoading(true);
-
-		try {
-			// 🔥 МАГИЯ ЗДЕСЬ: Перед загрузкой заказов, в фоне просим сервер 
-			// проверить и убрать в архив всё, что выдано больше 3 дней назад
-			await api.post('orders/trigger_auto_archive/');
-		} catch (err) {
-			console.error("Ошибка авто-архивации на сервере:", err);
+		// 🔥 МАГИЯ КЭША: Если в браузере уже есть сохраненные заказы, моментально показываем их
+		const cached = localStorage.getItem('cached_orders');
+		if (cached) {
+			setOrders(JSON.parse(cached));
+			setIsLoading(false); // Выключаем лоадер МОМЕНТАЛЬНО (бабах!)
+		} else {
+			setIsLoading(true);
 		}
 
-		// После чистки загружаем свежий список актуальных заказов
+		// В любом случае запускаем тихое скачивание свежих данных
 		await fetchOrdersSilently();
 		setIsLoading(false);
+
+		// Запускаем чистку архива В ФОНЕ (без await), она отработает незаметно
+		api.post('orders/trigger_auto_archive/')
+			.then(() => fetchOrdersSilently())
+			.catch(err => {
+				console.error("Ошибка авто-архивации на сервере:", err);
+			});
 	};
 
 	useEffect(() => {
@@ -156,42 +164,94 @@ export default function OrdersPage() {
 
 	const handleSaveOrder = async (orderData: any) => {
 		const saveToast = toast.loading('Сохранение...');
+		
+		// 1. ОПТИМИСТИКА: Мгновенно закрываем модальное окно, не ждем сервер!
+		setIsModalOpen(false);
+
+		const fakeId = Date.now();
+		const isCreating = !editingOrder;
+
+		// 2. ОПТИМИСТИКА: Сразу рисуем заказ в таблице, чтобы пользователь видел результат моментально
+		if (isCreating) {
+			const fakeOrder = {
+				id: fakeId,
+				client: orderData.client,
+				client_phone: orderData.client_phone,
+				status: 'in-progress',
+				is_received: false,
+				created_at: new Date().toISOString(),
+				items: (orderData.items_write || []).map((i: any, idx: number) => ({
+					id: fakeId + idx,
+					name: i.name || 'Ожидание...',
+					quantity: i.quantity || 1,
+					deadline: i.deadline,
+					status: i.status || 'not-ready',
+					comment: i.comment || '',
+					responsible_user: { first_name: 'Сохранение...' } 
+				}))
+			};
+			setOrders(prev => [fakeOrder, ...prev]);
+		}
+
 		try {
+			let savedOrder: any;
 			if (editingOrder) {
-				await api.put(`orders/${editingOrder.id}/`, orderData);
+				const res = await api.put(`orders/${editingOrder.id}/`, orderData);
+				savedOrder = res.data;
+				// Обновляем реальными данными
+				setOrders(prev => prev.map(o => o.id === savedOrder.id ? savedOrder : o));
 			} else {
-				await api.post('orders/', orderData);
+				const res = await api.post('orders/', orderData);
+				savedOrder = res.data;
+				// Меняем наш фейковый ID на настоящий из Базы Данных
+				setOrders(prev => prev.map(o => o.id === fakeId ? savedOrder : o));
 			}
+			
 			toast.success('Успешно!', { id: saveToast });
-			setIsModalOpen(false);
-			fetchOrdersSilently();
 			notifyHeader();
 		} catch (e) {
-			toast.error('Ошибка сети', { id: saveToast });
+			toast.error('Ошибка сети. Действие отменено.', { id: saveToast });
+			if (isCreating) {
+				setOrders(prev => prev.filter(o => o.id !== fakeId)); // Убираем фейк при ошибке
+			}
+			fetchOrdersSilently(); // Синхронизируем базу
 		}
 	};
 
 	const handleArchiveOrder = async (orderId: number) => {
+		// ОПТИМИСТИЧНЫЙ UI: Сначала моментально прячем заказ с экрана
+		const previousOrders = [...orders];
+		setOrders(prev => prev.filter(o => o.id !== orderId));
+		toast.success('Заказ отправлен в архив');
+
 		try {
-			// 🔥 Вызываем жесткую команду архивации на сервере
+			// Отправляем запрос в фоне
 			await api.post(`orders/${orderId}/archive/`);
-			toast.success('Заказ отправлен в архив');
-			fetchOrdersSilently();
 			notifyHeader();
 		} catch (e) {
-			toast.error('Ошибка при архивации');
+			// Если произошла ошибка сети, возвращаем карточку обратно
+			setOrders(previousOrders);
+			toast.error('Ошибка сети. Заказ возвращен.');
 		}
 	};
 
 	const confirmDelete = async () => {
 		if (!orderToDelete) return;
+
+		// ОПТИМИСТИЧНЫЙ UI: Сначала закрываем окно и моментально удаляем карточку
+		const previousOrders = [...orders];
+		const targetId = orderToDelete.id;
+		
+		setOrders(prev => prev.filter(o => o.id !== targetId));
+		setIsDeleteModalOpen(false);
+		toast.success('Удалено');
+
 		try {
-			await api.delete(`orders/${orderToDelete.id}/`);
-			toast.success('Удалено');
-			setIsDeleteModalOpen(false);
-			fetchOrdersSilently();
+			// Асинхронно удаляем на сервере
+			await api.delete(`orders/${targetId}/`);
 			notifyHeader();
 		} catch (e) {
+			setOrders(previousOrders);
 			toast.error('Ошибка при удалении');
 		}
 	};
@@ -242,14 +302,20 @@ export default function OrdersPage() {
 			return matchesSearch && matchesStatus && matchesProduct && matchesDeadline;
 		});
 
-		const statusWeight: Record<string, number> = { 'in-progress': 1, 'not-ready': 2, 'ready': 3 };
+		const sortTodayStr = getLocalDateStr(0);
+		const isOverdue = (order: any) =>
+			order.status !== 'ready' &&
+			Array.isArray(order.items) &&
+			order.items.some((i: any) => i.status !== 'ready' && i.deadline && i.deadline < sortTodayStr);
 
 		result.sort((a, b) => {
-			const weightA = statusWeight[a.status] || 2;
-			const weightB = statusWeight[b.status] || 2;
-			if (weightA !== weightB) {
-				return weightA - weightB;
-			}
+			// Оставляем просроченные заказы наверху, чтобы о них не забыли
+			const overdueA = isOverdue(a) ? 0 : 1;
+			const overdueB = isOverdue(b) ? 0 : 1;
+			if (overdueA !== overdueB) return overdueA - overdueB;
+
+			// Дальше просто сортируем по дате создания (чем новее, тем выше), 
+			// БЕЗ прыжков по статусу, как и просил клиент.
 			return b.id - a.id;
 		});
 
@@ -389,9 +455,16 @@ export default function OrdersPage() {
 												</div>
 												<div className="text-xs font-bold text-slate-500 mt-1.5">
 													{order.client_phone ? (
-														<a href={`tel:${order.client_phone}`} className="hover:text-primary hover:underline flex items-center gap-1.5 w-max">
-															<Phone size={12} /> {order.client_phone}
-														</a>
+														<div
+															onClick={() => {
+																navigator.clipboard.writeText(order.client_phone);
+																toast.success('Номер телефона скопирован!');
+															}}
+															className="cursor-pointer hover:text-primary hover:underline flex items-center gap-1.5 w-max group/phone"
+															title="Нажмите, чтобы скопировать"
+														>
+															<Phone size={12} /> {order.client_phone} <Copy size={10} className="opacity-0 group-hover/phone:opacity-100" />
+														</div>
 													) : '—'}
 												</div>
 											</td>
@@ -421,9 +494,9 @@ export default function OrdersPage() {
 																		<div className="w-6 h-6 rounded-full bg-white border border-slate-200 text-primary flex items-center justify-center text-xs font-black shrink-0 shadow-inner">{idx + 1}</div>
 																		<div className="font-black text-sm tracking-tight">{item.name} <span className="text-slate-500 font-medium ml-1">x{item.quantity}</span></div>
 
-																		<div className="flex flex-col text-[10px] font-bold ml-1 sm:ml-2 border-l border-slate-200/50 pl-3.5 space-y-0.5">
-																			<div className="flex items-center gap-1.5 text-slate-500"><PlayCircle size={12} /> {order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}</div>
-																			<div className={`flex items-center gap-1.5 ${getDeadlineStyles(item.deadline)}`}><Flag size={12} /> {item.deadline ? new Date(item.deadline).toLocaleDateString('ru-RU') : '—'}</div>
+																		<div className="flex flex-col text-xs sm:text-[13px] font-black ml-1 sm:ml-4 border-l-2 border-slate-200/50 pl-4 space-y-1">
+																			<div className="flex items-center gap-2 text-slate-500"><PlayCircle size={14} className="text-slate-400" /> {order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}</div>
+																			<div className={`flex items-center gap-2 ${getDeadlineStyles(item.deadline)}`}><Flag size={14} /> {item.deadline ? new Date(item.deadline).toLocaleDateString('ru-RU') : '—'}</div>
 																		</div>
 
 																		<div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-700 ml-4 bg-white/70 px-2.5 py-1.5 rounded-lg border border-slate-100/80 shadow-inner">

@@ -10,6 +10,10 @@ from .services import OrderService
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
+        role = 'worker'
+        if hasattr(self.user, 'profile'):
+            role = self.user.profile.role
+
         data['user'] = {
             'id': self.user.id,
             'username': self.user.username,
@@ -17,13 +21,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'last_name': self.user.last_name,
             'email': self.user.email,
             'is_superuser': self.user.is_superuser,
+            'role': role,
         }
         return data
 
 class UserSimpleSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'email']
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'role']
+
+    def get_role(self, obj):
+        if hasattr(obj, 'profile'):
+            return obj.profile.role
+        return 'worker'
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -84,14 +96,13 @@ class BaseOrderSerializer(serializers.ModelSerializer):
 
 # 🔥 СЕРИАЛИЗАТОР СПИСКА: Наследует get_items из BaseOrderSerializer
 class OrderListSerializer(BaseOrderSerializer):
-    # 🔥 ДОБАВЛЕНО: Подключаем историю к списку заказов
-    history = OrderHistorySerializer(many=True, read_only=True)
-
+    # УБРАНА history для существенного ускорения загрузки списка!
+    
     class Meta:
         model = Order
         fields = [
             'id', 'client', 'client_phone', 'status', 'is_received', 'received_at', 'is_archived', 
-            'created_at', 'updated_at', 'items', 'history'
+            'created_at', 'updated_at', 'items'
         ]
         read_only_fields = ['status']
 

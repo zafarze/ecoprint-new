@@ -13,11 +13,22 @@ export default function ArchivePage() {
 	const [searchQuery, setSearchQuery] = useState('');
 
 	const fetchArchive = async () => {
-		setIsLoading(true);
+		// 🔥 МАГИЯ КЭША
+		const cached = localStorage.getItem('cached_archive');
+		if (cached) {
+			setArchivedOrders(JSON.parse(cached));
+			setIsLoading(false);
+		} else {
+			setIsLoading(true);
+		}
+
 		try {
 			const res = await api.get('orders/?is_archived=true');
 			const data = res.data;
 			const ordersArray = Array.isArray(data) ? data : (data.results || []);
+			
+			// Обновляем кэш и стейт
+			localStorage.setItem('cached_archive', JSON.stringify(ordersArray));
 			setArchivedOrders(ordersArray);
 		} catch (err) {
 			console.error("Ошибка сети при загрузке архива:", err);

@@ -16,6 +16,7 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 	const [firstName, setFirstName] = useState('');
 	const [lastName, setLastName] = useState('');
 	const [email, setEmail] = useState('');
+	const [role, setRole] = useState('worker');
 
 	useEffect(() => {
 		if (initialData) {
@@ -23,17 +24,19 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 			setFirstName(initialData.first_name || '');
 			setLastName(initialData.last_name || '');
 			setEmail(initialData.email || '');
+			setRole(initialData.role || 'worker');
 		} else {
 			setUsername('');
 			setFirstName('');
 			setLastName('');
 			setEmail('');
+			setRole('worker');
 		}
 	}, [initialData, isOpen]);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		onSave({ username, first_name: firstName, last_name: lastName, email });
+		onSave({ username, first_name: firstName, last_name: lastName, email, role });
 	};
 
 	return (
@@ -74,6 +77,20 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 				<div>
 					<Label>Email</Label>
 					<Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ivan@ecoprint.tj" />
+				</div>
+
+				<div>
+					<Label>Роль в системе *</Label>
+					<select
+						value={role}
+						onChange={(e) => setRole(e.target.value)}
+						className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+						required
+					>
+						<option value="worker">Работник (Только Главная)</option>
+						<option value="manager">Менеджер (Главная, Товары, Архив)</option>
+						<option value="superadmin">Супер Админ (Полный доступ)</option>
+					</select>
 				</div>
 
 				<div className="pt-4 flex gap-3">

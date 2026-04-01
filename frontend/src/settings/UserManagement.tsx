@@ -5,6 +5,12 @@ import Card from '../components/ui/Card';
 import UserModal from '../modals/UserModal';
 import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 
+const ROLE_LABELS: Record<string, string> = {
+	superadmin: 'Супер Админ',
+	manager: 'Менеджер',
+	worker: 'Работник',
+};
+
 export default function UserManagement() {
 	const [users, setUsers] = useState<any[]>([]);
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -105,7 +111,7 @@ export default function UserManagement() {
 									<td className="px-6 py-4 font-bold text-slate-600">{u.email || '—'}</td>
 									<td className="px-6 py-4 text-center">
 										<span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200 inline-flex items-center gap-1">
-											<ShieldAlert size={12} /> Менеджер
+											<ShieldAlert size={12} /> {ROLE_LABELS[u.role] || 'Работник'}
 										</span>
 									</td>
 									<td className="px-6 py-4 text-right">

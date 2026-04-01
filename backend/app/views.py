@@ -29,17 +29,24 @@ from .serializers import (
 )
 from .telegram_bot import send_telegram_notification
 
+from .permissions import IsSuperAdmin, IsManagerOrAdmin
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-class IsAdminOrCantDelete(BasePermission):
-    def has_permission(self, request, view):
-        if view.action == 'destroy':
-            return request.user.is_superuser
-        return True
-
 class OrderViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО: Защита эндпоинта включена
+    # По умолчанию пускаем всех авторизованных (на чтение)
+    permission_classes = [IsAuthenticated]  
+
+    def get_permissions(self):
+        # Удалять заказ может строго супер-админ
+        if self.action in ['destroy']:
+            return [IsSuperAdmin()]
+        # Создавать, менять, архивировать заказы может Менеджер и Админ
+        elif self.action in ['create', 'update', 'partial_update', 'archive', 'unarchive', 'trigger_auto_archive']:
+            return [IsManagerOrAdmin()]
+        return super().get_permissions()
+    pagination_class = None  # 🔥 ОПТИМИЗАЦИЯ: Фронтенд сам фильтрует и пагинирует
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -47,17 +54,25 @@ class OrderViewSet(viewsets.ModelViewSet):
         return OrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.all().annotate(
-            min_deadline=Min('items__deadline')
-        ).order_by(F('min_deadline').asc(nulls_last=True), '-created_at')
+        # 🔥 ОПТИМИЗАЦИЯ: Убрали тяжелую сортировку annotate(min_deadline=Min())
+        # Причина: React сам всё сортирует. Это экономит СЕКУНДЫ времени БД!
+        queryset = Order.objects.all().order_by('-id')
         
         is_archived = self.request.query_params.get('is_archived', None)
         if is_archived is not None:
             is_archived_bool = is_archived.lower() == 'true'
             queryset = queryset.filter(is_archived=is_archived_bool)
             
-        # 🔥 ИСПРАВЛЕНО: Теперь история всегда подгружается вместе с заказами
-        return queryset.prefetch_related('items__responsible_user', 'history__user')
+        # 🔥 ОПТИМИЗАЦИЯ: Погружаем историю ТОЛЬКО при открытии 1 заказа, а не для всего списка
+        from django.db.models import Prefetch
+        from .models import Item, OrderHistory
+        
+        prefetches = [Prefetch('items', queryset=Item.objects.select_related('responsible_user'))]
+        
+        if getattr(self, 'action', '') != 'list':
+            prefetches.append(Prefetch('history', queryset=OrderHistory.objects.select_related('user')))
+            
+        return queryset.prefetch_related(*prefetches)
 
     def get_serializer_context(self):
         context = super().get_serializer_context() 
@@ -141,8 +156,15 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 
 class ItemViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
+    permission_classes = [IsAuthenticated]  
     queryset = Item.objects.all()
+
+    def get_permissions(self):
+        # Удалять товары внутри заказа может только менеджер или админ
+        if self.action in ['destroy']:
+            return [IsManagerOrAdmin()]
+        # Любой авторизованный (в т.ч. работник) может менять статус (partial_update)
+        return super().get_permissions()
 
     def get_serializer_class(self):
         if self.request.method in ['POST', 'PUT', 'PATCH']:
@@ -168,10 +190,17 @@ class ItemViewSet(viewsets.ModelViewSet):
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
+    permission_classes = [IsAuthenticated]  
     queryset = Product.objects.all().order_by('name')
     serializer_class = ProductSerializer
     pagination_class = None 
+    
+    def get_permissions(self):
+        # Читать каталог (list) могут все авторизованные (работник тоже, если вдруг),
+        # но управлять товарами могут только менеджеры и админы.
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsManagerOrAdmin()]
+        return super().get_permissions()
     
     @method_decorator(never_cache)
     def list(self, request, *args, **kwargs):
@@ -179,7 +208,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
+    permission_classes = [IsSuperAdmin] # 🔥 Строго для админа
     queryset = User.objects.filter(is_active=True).order_by('first_name')
     serializer_class = UserSimpleSerializer
     pagination_class = None
@@ -196,14 +225,13 @@ def chat_with_ai(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО
+@permission_classes([IsSuperAdmin]) # 🔥 Графики и аналитика строго для админа (и может быть менеджера, но пока админу)
 def statistics_data_view(request):
     period = request.query_params.get('period', 'week')
     if not request.user.is_superuser:
         period = 'week'
     
     today = timezone.now().date()
-    start_date = today
     
     if period == 'month':
         start_date = today - timedelta(days=29)
@@ -218,29 +246,41 @@ def statistics_data_view(request):
         start_date = today - timedelta(days=6)
         period = 'week'
 
-    orders_in_period = Order.objects.filter(created_at__gte=start_date)
-    total_orders = orders_in_period.count()
-    pending_orders = orders_in_period.filter(status='in-progress').count()
-    created_today = Order.objects.filter(created_at__gte=today).count()
+    from collections import Counter
+    # 🔥 ОПТИМИЗАЦИЯ ГОДА: Убрали 6 медленных SQL-запросов (Count). 
+    # Теперь делаем 2 легчайших запроса и считаем статистику в памяти Python мгновенно!
     
-    top_product_query = Item.objects.filter(
-        order__created_at__gte=start_date
-    ).values('name').annotate(name_count=Count('name')).order_by('-name_count').first()
+    # 1. Быстро достаем сырые данные
+    orders_data = list(Order.objects.filter(created_at__gte=start_date).values('status', 'created_at'))
     
-    top_product_name = top_product_query['name'] if top_product_query else "Нет данных"
-
-    status_counts_query = orders_in_period.values('status').annotate(count=Count('status')).order_by('status')
+    total_orders = len(orders_data)
+    pending_orders = sum(1 for o in orders_data if o['status'] == 'in-progress')
+    
+    # Переводим UTC время в локальное для правильного подсчета дней
+    local_dates = [timezone.localtime(o['created_at']).date() for o in orders_data]
+    created_today = sum(1 for d in local_dates if d >= today)
+    
+    # Подсчет статусов
+    status_counter = Counter(o['status'] for o in orders_data)
     status_data = {
-        'labels': [item['status'] for item in status_counts_query],
-        'counts': [item['count'] for item in status_counts_query],
+        'labels': list(status_counter.keys()),
+        'counts': list(status_counter.values()),
     }
 
+    # 2. Вытаскиваем названия товаров для топа
+    items_data = list(Item.objects.filter(order__created_at__gte=start_date).values_list('name', flat=True))
+    top_product_name = "Нет данных"
+    if items_data:
+        items_counter = Counter(items_data)
+        top_product_name = items_counter.most_common(1)[0][0]
+
+    # Подсчет динамики
     dynamics_data = []
+    
     if period in ['week', 'month']:
-        daily_counts = orders_in_period.annotate(date=TruncDate('created_at')).values('date').annotate(count=Count('id'))
-        counts_dict = {item['date']: item['count'] for item in daily_counts}
-        
+        date_counter = Counter(local_dates)
         days_count = 7 if period == 'week' else 30
+        
         for i in range(days_count - 1, -1, -1):
             d = today - timedelta(days=i)
             if period == 'week':
@@ -249,11 +289,10 @@ def statistics_data_view(request):
             else:
                 name = d.strftime('%d.%m')
                 
-            dynamics_data.append({'name': name, 'orders': counts_dict.get(d, 0)})
+            dynamics_data.append({'name': name, 'orders': date_counter.get(d, 0)})
             
     elif period == 'year':
-        monthly_counts = orders_in_period.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id'))
-        month_dict = {item['month'].date() if hasattr(item['month'], 'date') else item['month']: item['count'] for item in monthly_counts}
+        month_counter = Counter(date(d.year, d.month, 1) for d in local_dates)
         
         for i in range(11, -1, -1):
             m = today.month - i
@@ -264,7 +303,7 @@ def statistics_data_view(request):
             target_month = date(y, m, 1)
             months_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
             
-            dynamics_data.append({'name': f"{months_ru[m-1]}", 'orders': month_dict.get(target_month, 0)})
+            dynamics_data.append({'name': f"{months_ru[m-1]}", 'orders': month_counter.get(target_month, 0)})
 
     return Response({
         'total_orders': total_orders,
@@ -277,7 +316,7 @@ def statistics_data_view(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО
+@permission_classes([IsManagerOrAdmin]) # 🔥 Синхронизация для менеджеров и админов
 def sync_to_google_sheets(request):
     try:
         service_account_path = os.path.join(settings.BASE_DIR, 'service_account.json')
@@ -326,7 +365,7 @@ def sync_to_google_sheets(request):
 
 
 class CompanySettingsAPIView(APIView):
-    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
+    permission_classes = [IsSuperAdmin] # 🔥 Доступ к настройкам компании только у админа
     
     def get(self, request):
         obj, _ = CompanySettings.objects.get_or_create(id=1)
@@ -342,7 +381,7 @@ class CompanySettingsAPIView(APIView):
 
 
 class TelegramSettingsAPIView(APIView):
-    permission_classes = [IsAuthenticated]  # 🔥 ИСПРАВЛЕНО
+    permission_classes = [IsSuperAdmin] # 🔥 Доступ к Telegram настройкам только у админа
     
     def get(self, request):
         obj, _ = TelegramSettings.objects.get_or_create(id=1)
@@ -360,6 +399,8 @@ class TelegramSettingsAPIView(APIView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО
 def header_stats(request):
+    from django.db.models import Count, Q
+    
     today = timezone.now().date()
     tomorrow = today + timedelta(days=1)
 
@@ -369,13 +410,15 @@ def header_stats(request):
         order__is_received=False
     ).exclude(status='ready')
     
-    today_count = active_items.filter(deadline=today).values('order').distinct().count()
-    tomorrow_count = active_items.filter(deadline=tomorrow).values('order').distinct().count()
-    
-    overdue_count = active_items.filter(deadline__lt=today).values('order').distinct().count()
+    # 🔥 ОПТИМИЗАЦИЯ: Агрегируем 3 разных count() в ОДИН запрос для ускорения ответа из облака
+    stats = active_items.aggregate(
+        today_count=Count('order', filter=Q(deadline=today), distinct=True),
+        tomorrow_count=Count('order', filter=Q(deadline=tomorrow), distinct=True),
+        overdue_count=Count('order', filter=Q(deadline__lt=today), distinct=True)
+    )
 
     return Response({
-        'today': today_count,
-        'tomorrow': tomorrow_count,
-        'overdue': overdue_count
+        'today': stats['today_count'] or 0,
+        'tomorrow': stats['tomorrow_count'] or 0,
+        'overdue': stats['overdue_count'] or 0
     })
