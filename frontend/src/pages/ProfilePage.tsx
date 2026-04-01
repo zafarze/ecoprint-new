@@ -10,7 +10,6 @@ export default function ProfilePage() {
 	const [firstName, setFirstName] = useState('');
 	const [lastName, setLastName] = useState('');
 
-	const [oldPassword, setOldPassword] = useState('');
 	const [newPassword, setNewPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,7 +33,7 @@ export default function ProfilePage() {
 	const handlePasswordChange = async (e: React.FormEvent) => {
 		e.preventDefault();
 		
-		if (!oldPassword || !newPassword || !confirmPassword) {
+		if (!newPassword || !confirmPassword) {
 			toast.error("Пожалуйста, заполните все поля");
 			return;
 		}
@@ -52,11 +51,9 @@ export default function ProfilePage() {
 		try {
 			setIsSubmitting(true);
 			await api.post('/profile/change-password/', {
-				old_password: oldPassword,
 				new_password: newPassword
 			});
 			toast.success("Пароль успешно обновлен!");
-			setOldPassword('');
 			setNewPassword('');
 			setConfirmPassword('');
 		} catch (error: any) {
@@ -138,19 +135,7 @@ export default function ProfilePage() {
 				</h2>
 				<Card>
 					<form onSubmit={handlePasswordChange} className="space-y-5">
-						
-						<div>
-							<Label>Текущий пароль</Label>
-							<Input
-								type="password"
-								value={oldPassword}
-								onChange={e => setOldPassword(e.target.value)}
-								placeholder="Введите текущий пароль"
-								className="max-w-md"
-							/>
-						</div>
-
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-slate-100 max-w-3xl">
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl">
 							<div>
 								<Label>Новый пароль</Label>
 								<Input
