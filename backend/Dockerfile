@@ -1,5 +1,5 @@
-# Используем легкую версию Python
-FROM python:3.12-slim
+# Используем четкую версию Python для обхода ошибки кэша в Google Cloud
+FROM python:3.12.2-slim-bookworm
 
 # Настройки среды
 ENV PYTHONUNBUFFERED=1
