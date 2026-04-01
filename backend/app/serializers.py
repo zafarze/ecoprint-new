@@ -37,6 +37,48 @@ class UserSimpleSerializer(serializers.ModelSerializer):
             return obj.profile.role
         return 'worker'
 
+class UserWriteSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(source='profile.role', required=False)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'role']
+
+    def create(self, validated_data):
+        profile_data = validated_data.pop('profile', {})
+        role = profile_data.get('role', 'worker')
+        
+        # Создаем юзера и сразу ставим стартовый пароль
+        user = User.objects.create(**validated_data)
+        user.set_password('123456')
+        user.save()
+        
+        # Профиль либо создался через сигнал, либо нет, поэтому обновляем роль
+        from .models import Profile
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.role = role
+        profile.save()
+        
+        return user
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop('profile', {})
+        role = profile_data.get('role')
+        
+        # Обновляем обычные поля User
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Обновляем роль, если передали
+        if role:
+            from .models import Profile
+            profile, _ = Profile.objects.get_or_create(user=instance)
+            profile.role = role
+            profile.save()
+            
+        return instance
+
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product

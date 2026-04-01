@@ -25,7 +25,7 @@ from .models import Order, Item, Product, CompanySettings, TelegramSettings
 from .serializers import (
     OrderSerializer, OrderListSerializer, ProductSerializer, UserSimpleSerializer, 
     ItemSerializer, ItemWriteSerializer, CustomTokenObtainPairSerializer,
-    CompanySettingsSerializer, TelegramSettingsSerializer
+    CompanySettingsSerializer, TelegramSettingsSerializer, UserWriteSerializer
 )
 from .telegram_bot import send_telegram_notification
 
@@ -207,11 +207,20 @@ class ProductViewSet(viewsets.ModelViewSet):
         return super().list(request, *args, **kwargs)
 
 
-class UserViewSet(viewsets.ReadOnlyModelViewSet):
+class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSuperAdmin] # 🔥 Строго для админа
     queryset = User.objects.filter(is_active=True).order_by('first_name')
-    serializer_class = UserSimpleSerializer
     pagination_class = None
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return UserWriteSerializer
+        return UserSimpleSerializer
+
+    def perform_destroy(self, instance):
+        # 🔥 Не удаляем физически из базы, а только "выключаем", чтобы история заказов не сломалась
+        instance.is_active = False
+        instance.save()
 
 
 @api_view(['POST'])

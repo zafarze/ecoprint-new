@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserPlus, Edit2, Trash2, Users, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../api/api';
 import Card from '../components/ui/Card';
 import UserModal from '../modals/UserModal';
 import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
@@ -19,15 +20,14 @@ export default function UserManagement() {
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 	const [userToDelete, setUserToDelete] = useState<any>(null);
 
-	const loadUsers = () => {
-		const token = localStorage.getItem('token');
-		// ИЗМЕНЕНО: Используем переменную окружения
-		fetch(`${import.meta.env.VITE_API_URL}/api/users/`, {
-			headers: { 'Authorization': `Bearer ${token}` }
-		})
-			.then(res => res.json())
-			.then(data => setUsers(data))
-			.catch(err => console.error(err));
+	const loadUsers = async () => {
+		try {
+			const res = await api.get('/users/');
+			setUsers(res.data);
+		} catch (err) {
+			console.error("Ошибка загрузки пользователей:", err);
+			toast.error("Не удалось загрузить сотрудников");
+		}
 	};
 
 	useEffect(() => { loadUsers(); }, []);
@@ -38,9 +38,21 @@ export default function UserManagement() {
 	};
 
 	const handleSaveUser = async (userData: any) => {
-		console.log("Сохранение пользователя (заглушка API):", userData);
-		toast.success('Пользователь сохранен!');
-		setIsModalOpen(false);
+		try {
+			if (editingUser) {
+				await api.put(`/users/${editingUser.id}/`, userData);
+				toast.success('Пользователь успешно обновлен!');
+			} else {
+				await api.post('/users/', userData);
+				toast.success('Сотрудник создан! Стартовый пароль: 123456', { duration: 5000 });
+			}
+			setIsModalOpen(false);
+			loadUsers();
+		} catch (error: any) {
+			console.error(error);
+			const errorMsg = error.response?.data?.username ? 'Такой логин уже существует' : 'Ошибка сохранения данных';
+			toast.error(errorMsg);
+		}
 	};
 
 	const handleDeleteClick = (user: any) => {
@@ -50,23 +62,16 @@ export default function UserManagement() {
 
 	const confirmDelete = async () => {
 		if (!userToDelete) return;
-		const token = localStorage.getItem('token');
 		try {
-			// ИЗМЕНЕНО: Используем переменную окружения
-			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userToDelete.id}/`, {
-				method: 'DELETE',
-				headers: { 'Authorization': `Bearer ${token}` }
-			});
-			if (res.ok) {
-				toast.success('Пользователь удален');
-				loadUsers();
-			} else {
-				toast.error('Ошибка при удалении');
-			}
+			await api.delete(`/users/${userToDelete.id}/`);
+			toast.success('Доступ сотрудника закрыт (отключен)');
+			loadUsers();
 		} catch (error) {
 			console.error(error);
+			toast.error('Ошибка при удалении');
 		} finally {
 			setIsDeleteModalOpen(false);
+			setUserToDelete(null);
 		}
 	};
 
