@@ -417,12 +417,12 @@ export default function OrdersPage() {
 
 			<Card noPadding className="overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
 				<div className="overflow-x-auto custom-scrollbar flex-1 pb-2">
-					<table className="w-full text-left border-collapse min-w-[1200px]">
+					<table className="w-full text-left border-collapse min-w-[950px]">
 						<thead>
 							<tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-xs uppercase font-black tracking-wider">
 								<th className="px-4 py-5 w-16">№</th>
 								<th className="px-4 py-5 w-32">Клиент</th>
-								<th className="px-6 py-5 min-w-[550px]">Товары (Интерактивные)</th>
+								<th className="px-4 py-5 w-full min-w-[400px]">Товары (Интерактивные)</th>
 								<th className="px-4 py-5 w-36 text-center">Статус и Выдача</th>
 								<th className="px-4 py-5 w-32 text-center">Действия</th>
 							</tr>
