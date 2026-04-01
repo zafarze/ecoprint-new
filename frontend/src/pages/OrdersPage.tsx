@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
 	Plus, Search, Edit2, Archive, Loader2, PackageOpen,
 	X, PlayCircle, Flag, User, AlertCircle, Filter,
-	MessageSquare, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, Copy, Phone, Calendar, Clock, CheckCircle2
+	MessageSquare, Trash2, ChevronLeft, ChevronRight, Copy, Phone, Calendar, Clock, CheckCircle2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '../components/ui/Card';
