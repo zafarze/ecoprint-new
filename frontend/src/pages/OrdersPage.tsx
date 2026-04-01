@@ -510,7 +510,7 @@ export default function OrdersPage() {
 																		</div>
 																	</div>
 
-																	<button onClick={() => handleToggleItemStatus(item, order.id)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider active:scale-95 cursor-pointer shrink-0 transition-colors ${currentBadgeStyle}`} title="Изменить статус">
+																	<button onClick={() => handleToggleItemStatus(item, order.id)} className={`w-[100px] py-1.5 rounded-lg text-[10px] flex items-center justify-center text-center font-black uppercase tracking-wider active:scale-95 cursor-pointer shrink-0 transition-colors ${currentBadgeStyle}`} title="Изменить статус">
 																		{currentBadgeLabel}
 																	</button>
 																</div>
