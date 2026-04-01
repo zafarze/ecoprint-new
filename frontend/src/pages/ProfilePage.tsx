@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
-import { UserCircle, Save, Camera } from 'lucide-react';
+import { UserCircle, Save, Camera, KeyRound, ShieldCheck } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input, Label } from '../components/ui/Form';
+import toast from 'react-hot-toast';
+import api from '../api/api';
 
 export default function ProfilePage() {
 	const [firstName, setFirstName] = useState('');
 	const [lastName, setLastName] = useState('');
+
+	const [oldPassword, setOldPassword] = useState('');
+	const [newPassword, setNewPassword] = useState('');
+	const [confirmPassword, setConfirmPassword] = useState('');
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	// Достаем имя из localStorage (как ты делал в шапке)
 	useEffect(() => {
@@ -18,9 +25,46 @@ export default function ProfilePage() {
 		}
 	}, []);
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const handleProfileSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		alert("Профиль сохранен!");
+		// TODO: API звонок для сохранения профиля
+		toast.success("Профиль успешно сохранен!");
+	};
+
+	const handlePasswordChange = async (e: React.FormEvent) => {
+		e.preventDefault();
+		
+		if (!oldPassword || !newPassword || !confirmPassword) {
+			toast.error("Пожалуйста, заполните все поля");
+			return;
+		}
+		
+		if (newPassword !== confirmPassword) {
+			toast.error("Новые пароли не совпадают");
+			return;
+		}
+
+		if (newPassword.length < 6) {
+			toast.error("Новый пароль должен содержать минимум 6 символов");
+			return;
+		}
+
+		try {
+			setIsSubmitting(true);
+			await api.post('/profile/change-password/', {
+				old_password: oldPassword,
+				new_password: newPassword
+			});
+			toast.success("Пароль успешно обновлен!");
+			setOldPassword('');
+			setNewPassword('');
+			setConfirmPassword('');
+		} catch (error: any) {
+			const errorMsg = error.response?.data?.error || "Произошла ошибка при смене пароля";
+			toast.error(errorMsg);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	return (
@@ -35,7 +79,7 @@ export default function ProfilePage() {
 			</div>
 
 			<Card>
-				<form onSubmit={handleSubmit} className="space-y-6">
+				<form onSubmit={handleProfileSubmit} className="space-y-6">
 
 					{/* Аватарка */}
 					<div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-slate-100">
@@ -79,12 +123,63 @@ export default function ProfilePage() {
 
 					<div className="pt-4 flex justify-end">
 						<Button type="submit" icon={<Save size={18} />}>
-							Сохранить изменения
+							Сохранить данные
 						</Button>
 					</div>
 
 				</form>
 			</Card>
+
+			{/* Смена пароля */}
+			<div className="pt-4">
+				<h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-3 mb-4 pl-1">
+					<KeyRound className="text-primary" size={24} />
+					Безопасность
+				</h2>
+				<Card>
+					<form onSubmit={handlePasswordChange} className="space-y-5">
+						
+						<div>
+							<Label>Текущий пароль</Label>
+							<Input
+								type="password"
+								value={oldPassword}
+								onChange={e => setOldPassword(e.target.value)}
+								placeholder="Введите текущий пароль"
+								className="max-w-md"
+							/>
+						</div>
+
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-slate-100 max-w-3xl">
+							<div>
+								<Label>Новый пароль</Label>
+								<Input
+									type="password"
+									value={newPassword}
+									onChange={e => setNewPassword(e.target.value)}
+									placeholder="Минимум 6 символов"
+								/>
+							</div>
+							<div>
+								<Label>Подтверждение пароля</Label>
+								<Input
+									type="password"
+									value={confirmPassword}
+									onChange={e => setConfirmPassword(e.target.value)}
+									placeholder="Повторите новый пароль"
+								/>
+							</div>
+						</div>
+
+						<div className="pt-4 flex">
+							<Button type="submit" disabled={isSubmitting} variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50" icon={<ShieldCheck size={18} />}>
+								{isSubmitting ? "Обновление..." : "Обновить пароль"}
+							</Button>
+						</div>
+
+					</form>
+				</Card>
+			</div>
 		</div>
 	);
 }

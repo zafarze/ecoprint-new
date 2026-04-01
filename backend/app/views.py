@@ -491,3 +491,23 @@ def header_stats(request):
         'tomorrow': stats['tomorrow_count'] or 0,
         'overdue': stats['overdue_count'] or 0
     })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    user = request.user
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+    
+    if not old_password or not new_password:
+        return Response({'error': 'Необходимо указать старый и новый пароль'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    if not user.check_password(old_password):
+        return Response({'error': 'Неверный старый пароль'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    if len(new_password) < 6:
+        return Response({'error': 'Новый пароль должен быть не менее 6 символов'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    user.set_password(new_password)
+    user.save()
+    return Response({'message': 'Пароль успешно изменен'}, status=status.HTTP_200_OK)

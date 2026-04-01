@@ -33,6 +33,8 @@ urlpatterns = [
     path('settings/company/', views.CompanySettingsAPIView.as_view(), name='app-settings-company'),
     path('settings/telegram/', views.TelegramSettingsAPIView.as_view(), name='app-settings-telegram'),
     
+    path('profile/change-password/', views.change_password, name='app-change-password'),
+    
     # ==========================================
     # СТАНДАРТНЫЙ CRUD
     # ==========================================
