@@ -417,14 +417,14 @@ export default function OrdersPage() {
 
 			<Card noPadding className="overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
 				<div className="overflow-x-auto custom-scrollbar flex-1 pb-2">
-					<table className="w-full text-left border-collapse min-w-[1100px]">
+					<table className="w-full text-left border-collapse min-w-[1200px]">
 						<thead>
 							<tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-xs uppercase font-black tracking-wider">
-								<th className="px-6 py-5 w-20">№</th>
-								<th className="px-6 py-5 w-48">Клиент</th>
-								<th className="px-6 py-5 min-w-[450px]">Товары (Интерактивные)</th>
-								<th className="px-6 py-5 w-40 text-center">Статус и Выдача</th>
-								<th className="px-6 py-5 w-32 text-center">Действия</th>
+								<th className="px-4 py-5 w-16">№</th>
+								<th className="px-4 py-5 w-32">Клиент</th>
+								<th className="px-6 py-5 min-w-[550px]">Товары (Интерактивные)</th>
+								<th className="px-4 py-5 w-36 text-center">Статус и Выдача</th>
+								<th className="px-4 py-5 w-32 text-center">Действия</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y-4 divide-slate-50/50">
@@ -442,12 +442,12 @@ export default function OrdersPage() {
 
 									return (
 										<tr key={order.id} className="bg-white hover:bg-slate-50/30 group">
-											<td className="px-6 py-6 align-top">
+											<td className="px-4 py-6 align-top">
 												<div className="font-black text-slate-800 text-lg">#{((currentPage - 1) * itemsPerPage) + orderIndex + 1}</div>
 												<div className="text-[11px] font-bold text-slate-400 mt-1">ID:{order.id}</div>
 											</td>
 
-											<td className="px-6 py-6 align-top">
+											<td className="px-4 py-6 align-top">
 												<div
 													onClick={() => {
 														navigator.clipboard.writeText(order.client);
@@ -494,7 +494,7 @@ export default function OrdersPage() {
 
 														return (
 															<div key={item.id} className={`flex flex-col gap-2.5 p-4 rounded-2xl border transition-colors ${currentCardStyle}`}>
-																<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+																<div className="flex items-center justify-between gap-4">
 																	<div className="flex items-center gap-3.5">
 																		<div className="w-6 h-6 rounded-full bg-white border border-slate-200 text-primary flex items-center justify-center text-xs font-black shrink-0 shadow-inner">{idx + 1}</div>
 																		<div className="font-black text-sm tracking-tight">{item.name} <span className="text-slate-500 font-medium ml-1">x{item.quantity}</span></div>
@@ -526,7 +526,7 @@ export default function OrdersPage() {
 												</div>
 											</td>
 
-											<td className="px-6 py-4 align-middle text-center">
+											<td className="px-4 py-4 align-middle text-center">
 												<div className="flex flex-col items-center justify-center gap-1.5">
 													{/* Общий статус заказа с учетом просрочки */}
 													{order.status === 'ready' ? (
@@ -554,7 +554,7 @@ export default function OrdersPage() {
 												</div>
 											</td>
 
-											<td className="px-6 py-6 align-top">
+											<td className="px-4 py-6 align-top">
 												<div className="flex justify-center gap-2">
 													<button onClick={() => { setEditingOrder(order); setIsModalOpen(true); }} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 hover:text-primary hover:border-primary transition-colors" title="Редактировать"><Edit2 size={16} /></button>
 													<button onClick={() => handleArchiveOrder(order.id)} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 hover:text-purple-500 hover:border-purple-500 transition-colors" title="В архив"><Archive size={16} /></button>
