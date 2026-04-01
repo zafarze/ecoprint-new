@@ -530,13 +530,13 @@ export default function OrdersPage() {
 												<div className="flex flex-col items-center justify-center gap-1.5">
 													{/* Общий статус заказа с учетом просрочки */}
 													{order.status === 'ready' ? (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 uppercase">Готово</span>
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 uppercase whitespace-nowrap">Готово</span>
 													) : isOrderOverdue ? (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 uppercase animate-pulse">Просрочено</span>
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 uppercase animate-pulse whitespace-nowrap">Просрочено</span>
 													) : order.status === 'in-progress' ? (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-orange-100 text-orange-600 uppercase">В процессе</span>
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-orange-100 text-orange-600 uppercase whitespace-nowrap">В процессе</span>
 													) : (
-														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 uppercase">Не готов</span>
+														<span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 uppercase whitespace-nowrap">Не готов</span>
 													)}
 
 													{order.status === 'ready' && canIssueOrders && (
