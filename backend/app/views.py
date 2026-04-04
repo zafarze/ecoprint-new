@@ -539,9 +539,14 @@ def get_profile(request):
     user = request.user
     profile = user.profile
     avatar_url = None
-    if profile.avatar and hasattr(profile.avatar, 'url'):
+    if profile.avatar:
         try:
-            avatar_url = request.build_absolute_uri(profile.avatar.url)
+            raw_url = profile.avatar.url
+            # GCS возвращает полный https:// URL — не оборачиваем
+            if raw_url.startswith('http'):
+                avatar_url = raw_url
+            else:
+                avatar_url = request.build_absolute_uri(raw_url)
         except Exception:
             avatar_url = None
     return Response({
@@ -575,7 +580,12 @@ def upload_avatar(request):
     profile.avatar = avatar_file
     profile.save(update_fields=['avatar'])
 
-    avatar_url = request.build_absolute_uri(profile.avatar.url)
+    raw_url = profile.avatar.url
+    # GCS возвращает полный https:// URL — не оборачиваем build_absolute_uri
+    if raw_url.startswith('http'):
+        avatar_url = raw_url
+    else:
+        avatar_url = request.build_absolute_uri(raw_url)
     return Response({'avatar_url': avatar_url, 'message': 'Фото успешно обновлено!'})
 
 

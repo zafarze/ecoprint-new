@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
@@ -24,6 +25,10 @@ CSRF_TRUSTED_ORIGINS = [
     'https://ecoprint-api-789088295892.europe-west3.run.app',
 ]
 
+# Cloud Run сидит за HTTPS proxy — говорим Django доверять заголовку X-Forwarded-Proto
+# Это исправляет build_absolute_uri() который строил http:// вместо https://
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -38,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'storages',  # <--- Google Cloud Storage
     
     # Наше локальное приложение EcoPrint:
     'app',
@@ -122,20 +128,48 @@ STATIC_URL = 'static/'
 # Папка, куда соберется вся статика при команде collectstatic
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Алгоритм кэширования и сжатия статики от WhiteNoise
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+# ==========================================
+# ХРАНИЛИЩЕ ФАЙЛОВ (умное переключение)
+# ==========================================
+_IS_CLOUD = os.environ.get('RUN_ON_CLOUD_RUN') == 'True'
+GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', '')
 
-# ==========================================
-# МЕДИАФАЙЛЫ (загруженные пользователями)
-# ==========================================
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+if _IS_CLOUD and GCS_BUCKET_NAME:
+    # --- На сервере: загружаем аватары в Google Cloud Storage ---
+    _gcs_credentials = None
+    _raw_creds = os.environ.get('GOOGLE_CREDS_JSON')
+    if _raw_creds:
+        from google.oauth2 import service_account
+        _creds_dict = json.loads(_raw_creds)
+        _gcs_credentials = service_account.Credentials.from_service_account_info(_creds_dict)
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+            "OPTIONS": {
+                "bucket_name": GCS_BUCKET_NAME,
+                "credentials": _gcs_credentials,
+                "default_acl": "publicRead",
+                "querystring_auth": False,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    MEDIA_URL = f'https://storage.googleapis.com/{GCS_BUCKET_NAME}/'
+else:
+    # --- Локально: обычная папка media/ ---
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
