@@ -39,18 +39,23 @@ class UserSimpleSerializer(serializers.ModelSerializer):
 
 class UserWriteSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source='profile.role', required=False)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'role']
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'role', 'password']
 
     def create(self, validated_data):
         profile_data = validated_data.pop('profile', {})
         role = profile_data.get('role', 'worker')
+        password = validated_data.pop('password', None)
         
-        # Создаем юзера и сразу ставим стартовый пароль
+        # Создаем юзера и ставим пароль (кастомный или стартовый)
         user = User.objects.create(**validated_data)
-        user.set_password('123456')
+        if password:
+            user.set_password(password)
+        else:
+            user.set_password('123456')
         user.save()
         
         # Профиль либо создался через сигнал, либо нет, поэтому обновляем роль
@@ -64,10 +69,15 @@ class UserWriteSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         profile_data = validated_data.pop('profile', {})
         role = profile_data.get('role')
+        password = validated_data.pop('password', None)
         
         # Обновляем обычные поля User
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+            
+        if password:
+            instance.set_password(password)
+            
         instance.save()
         
         # Обновляем роль, если передали

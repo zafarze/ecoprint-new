@@ -187,8 +187,8 @@ export default function ProductsPage() {
 										<tr key={item.id} className="hover:bg-slate-50 transition-colors group">
 											<td className="px-6 py-4 font-black text-slate-800">
 												<div className="flex items-center gap-3">
-													<div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center">
-														<i className={item.icon || 'fas fa-box'}></i>
+													<div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+														<i className={`${item.icon || 'fas fa-box'} text-primary`}></i>
 													</div>
 													{item.name}
 												</div>

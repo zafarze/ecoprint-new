@@ -407,7 +407,7 @@ export default function OrdersPage() {
 										: 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
 										}`}
 								>
-									<i className={`${p.icon || 'fas fa-tag'} ${activeProduct === p.name ? 'text-white/80' : 'text-slate-400'}`}></i> {p.name}
+									<i className={`${p.icon || 'fas fa-tag'} ${activeProduct === p.name ? 'text-white/90' : 'text-primary'}`}></i> {p.name}
 								</button>
 							))
 						)}

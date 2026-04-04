@@ -151,7 +151,7 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 											<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
 												{products.map(p => (
 													<button key={p.id} type="button" onClick={() => { updateItem(item.id, 'name', p.name); setActiveProductDropdown(null); }} className="flex items-center gap-2 p-2 bg-white border border-slate-100 rounded-lg hover:border-primary hover:text-primary hover:shadow-sm text-sm font-medium text-left transition-all">
-														<i className={`${p.icon} text-slate-400 group-hover:text-primary`}></i> {p.name}
+														<i className={`${p.icon} text-primary`}></i> {p.name}
 													</button>
 												))}
 											</div>

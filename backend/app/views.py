@@ -1,6 +1,6 @@
 import os
 import threading
-import gspread
+# import gspread
 from datetime import date, timedelta
 from .models import Order, Item, Product, CompanySettings, TelegramSettings, OrderHistory
 from django.db import transaction  # 🔥 ДОБАВЛЕНО: для защиты базы данных (транзакции)
@@ -19,7 +19,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .ai_service import ask_gemini
+# from .ai_service import ask_gemini
 from .models import Order, Item, Product, CompanySettings, TelegramSettings
 
 from .serializers import (
@@ -43,7 +43,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         if self.action in ['destroy']:
             return [IsSuperAdmin()]
         # Создавать, менять, архивировать заказы может Менеджер и Админ
-        elif self.action in ['create', 'update', 'partial_update', 'archive', 'unarchive', 'trigger_auto_archive']:
+        elif self.action in ['create', 'update', 'partial_update', 'archive', 'unarchive']:
             return [IsManagerOrAdmin()]
         return super().get_permissions()
     pagination_class = None  # 🔥 ОПТИМИЗАЦИЯ: Фронтенд сам фильтрует и пагинирует
@@ -229,7 +229,8 @@ def chat_with_ai(request):
     question = request.data.get('message', '')
     if not question:
         return Response({'error': 'Пустой вопрос'}, status=400)
-    answer = ask_gemini(question)
+    # answer = ask_gemini(question)
+    answer = "AI временно недоступен из-за проблем с зависимостями."
     return Response({'answer': answer})
 
 
@@ -328,7 +329,6 @@ def statistics_data_view(request):
 @permission_classes([IsManagerOrAdmin]) # 🔥 Синхронизация для менеджеров и админов
 def sync_to_google_sheets(request):
     try:
-        import json
         google_creds_json = os.environ.get('GOOGLE_CREDS_JSON')
         if google_creds_json:
             creds_dict = json.loads(google_creds_json)
@@ -381,10 +381,6 @@ def sync_to_google_sheets(request):
 @api_view(['POST', 'GET'])
 @permission_classes([permissions.AllowAny])
 def sync_sheets_webhook(request):
-    """
-    Вебхук для автоматического запуска (например, через Google Cloud Scheduler).
-    Не требует JWT токена менеджера, требует только секретный ключ.
-    """
     secret = request.GET.get('secret')
     expected_secret = os.environ.get('CRON_SECRET', 'ecoprint_secret_cron_job_2026')
     

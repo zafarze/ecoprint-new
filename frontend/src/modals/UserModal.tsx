@@ -17,6 +17,7 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 	const [lastName, setLastName] = useState('');
 	const [email, setEmail] = useState('');
 	const [role, setRole] = useState('worker');
+	const [password, setPassword] = useState('');
 
 	useEffect(() => {
 		if (initialData) {
@@ -25,18 +26,24 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 			setLastName(initialData.last_name || '');
 			setEmail(initialData.email || '');
 			setRole(initialData.role || 'worker');
+			setPassword('');
 		} else {
 			setUsername('');
 			setFirstName('');
 			setLastName('');
 			setEmail('');
 			setRole('worker');
+			setPassword('');
 		}
 	}, [initialData, isOpen]);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		onSave({ username, first_name: firstName, last_name: lastName, email, role });
+		const data: any = { username, first_name: firstName, last_name: lastName, email, role };
+		if (password) {
+			data.password = password;
+		}
+		onSave(data);
 	};
 
 	return (
@@ -61,6 +68,16 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 				<div>
 					<Label>Логин (Username) *</Label>
 					<Input value={username} onChange={e => setUsername(e.target.value)} required placeholder="Например: ivan_manager" />
+				</div>
+
+				<div>
+					<Label>{initialData ? 'Новый пароль' : 'Пароль'}</Label>
+					<Input
+						type="password"
+						value={password}
+						onChange={e => setPassword(e.target.value)}
+						placeholder={initialData ? "Оставьте пустым, если не хотите менять" : "Если пусто, пароль будет 123456"}
+					/>
 				</div>
 
 				<div className="grid grid-cols-2 gap-4">

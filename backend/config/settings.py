@@ -94,26 +94,11 @@ if os.environ.get('RUN_ON_CLOUD_RUN') == 'True':
         }
     }
 else:
-    # Локальная база данных на твоем ПК (для разработки) + ЗАГЛУШКИ ДЛЯ DOCKER BUILD
+    # Локальная база данных SQLite для разработки
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'dummy_db'),
-            'USER': os.environ.get('DB_USER', 'dummy_user'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'dummy_pass'),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-            'PORT': os.environ.get('DB_PORT', '5432'),
-            
-            # Держим соединение открытым 
-            'CONN_MAX_AGE': 60,  # Давай снизим до 60 секунд, для локальной разработки этого хватит за глаза
-            
-            # 🔥 ДОБАВЛЯЕМ ЭТУ СТРОКУ (Проверка здоровья соединения перед запросом):
-            'CONN_HEALTH_CHECKS': True,
-            
-            # ВАЖНО: Добавлено требование SSL для подключения к Google Cloud SQL
-            'OPTIONS': {
-                'sslmode': 'require',
-            },
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 

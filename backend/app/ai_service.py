@@ -1,6 +1,6 @@
 import os
 from django.conf import settings
-from google import genai
+# from google import genai
 from .models import Order
 
 def get_context_from_db():
@@ -39,45 +39,45 @@ def get_context_from_db():
     )
     return context
 
-def ask_gemini(user_question):
-    # ИЗМЕНЕНО: Сначала ищем ключ в переменных окружения (для Cloud Run), 
-    # а если там нет — в настройках Django (для локальной разработки)
-    api_key = os.environ.get('GEMINI_API_KEY') or getattr(settings, 'GEMINI_API_KEY', None)
-    
-    if not api_key:
-        return "Ошибка сервера: Не настроен API ключ Gemini. Добавьте его в переменные окружения."
+# def ask_gemini(user_question):
+#     # ИЗМЕНЕНО: Сначала ищем ключ в переменных окружения (для Cloud Run), 
+#     # а если там нет — в настройках Django (для локальной разработки)
+#     api_key = os.environ.get('GEMINI_API_KEY') or getattr(settings, 'GEMINI_API_KEY', None)
+#     
+#     if not api_key:
+#         return "Ошибка сервера: Не настроен API ключ Gemini. Добавьте его в переменные окружения."
 
-    try:
-        # Инициализация клиента
-        client = genai.Client(api_key=api_key)
-    except Exception as e:
-        print(f"❌ ОШИБКА настройки Gemini: {e}")
-        return f"Ошибка настройки клиента AI: {e}"
+#     try:
+#         # Инициализация клиента
+#         client = genai.Client(api_key=api_key)
+#     except Exception as e:
+#         print(f"❌ ОШИБКА настройки Gemini: {e}")
+#         return f"Ошибка настройки клиента AI: {e}"
 
-    # Получаем сжатый контекст
-    context_data = get_context_from_db()
-    
-    system_instruction = (
-        "Ты — полезный AI-помощник в CRM типографии. "
-        "Твоя цель — быстро давать информацию менеджерам. "
-        "Помни, что ты видишь только 50 последних активных заказов. "
-        "Не придумывай факты. Если заказа нет в списке, так и скажи (возможно, он в архиве или старый). "
-        "Отвечай коротко и используй эмодзи."
-    )
-    
-    full_prompt = (
-        f"{system_instruction}\n\n"
-        f"ДАННЫЕ ИЗ БАЗЫ:\n{context_data}\n\n"
-        f"Вопрос пользователя: {user_question}"
-    )
-    
-    try:
-        # Отправляем запрос
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=full_prompt,
-        )
-        return response.text
-    except Exception as e:
-        print(f"❌ Ошибка при генерации ответа: {e}")
-        return "Произошла ошибка при обращении к ИИ. Попробуйте позже."
+#     # Получаем сжатый контекст
+#     context_data = get_context_from_db()
+#     
+#     system_instruction = (
+#         "Ты — полезный AI-помощник в CRM типографии. "
+#         "Твоя цель — быстро давать информацию менеджерам. "
+#         "Помни, что ты видишь только 50 последних активных заказов. "
+#         "Не придумывай факты. Если заказа нет в списке, так и скажи (возможно, он в архиве или старый). "
+#         "Отвечай коротко и используй эмодзи."
+#     )
+#     
+#     full_prompt = (
+#         f"{system_instruction}\n\n"
+#         f"ДАННЫЕ ИЗ БАЗЫ:\n{context_data}\n\n"
+#         f"Вопрос пользователя: {user_question}"
+#     )
+#     
+#     try:
+#         # Отправляем запрос
+#         response = client.models.generate_content(
+#             model='gemini-2.5-flash',
+#             contents=full_prompt,
+#         )
+#         return response.text
+#     except Exception as e:
+#         print(f"❌ Ошибка при генерации ответа: {e}")
+#         return "Произошла ошибка при обращении к ИИ. Попробуйте позже."

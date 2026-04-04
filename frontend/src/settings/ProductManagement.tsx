@@ -136,7 +136,7 @@ export default function ProductManagement() {
 									</td>
 									<td className="px-6 py-4">
 										<div className="flex items-center gap-2">
-											<i className={p.icon} style={{ color: '#64748b' }}></i>
+											<i className={`${p.icon} text-primary`}></i>
 											<span className="text-xs font-mono text-slate-400">{p.icon}</span>
 										</div>
 									</td>
