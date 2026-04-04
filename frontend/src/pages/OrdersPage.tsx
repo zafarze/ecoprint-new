@@ -40,6 +40,18 @@ const getLocalDateStr = (offsetDays = 0) => {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// 🔥 ФУНКЦИЯ ДЛЯ КРАСИВОГО И ЕДИНОГО ФОРМАТА ДАТЫ (ДД.ММ.ГГГГ)
+// Работает одинаково во всех странах (Германия, Таджикистан, Россия и т.д.)
+const formatDateToRu = (dateStr: string) => {
+	if (!dateStr) return '—';
+	const d = new Date(dateStr);
+	if (isNaN(d.getTime())) return '—';
+	const day = String(d.getDate()).padStart(2, '0');
+	const month = String(d.getMonth() + 1).padStart(2, '0');
+	const year = d.getFullYear();
+	return `${day}.${month}.${year}`;
+};
+
 export default function OrdersPage() {
 	const userStr = localStorage.getItem('user');
 	const user = userStr ? JSON.parse(userStr) : null;
@@ -496,11 +508,11 @@ export default function OrdersPage() {
 												<div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold mb-2.5 pl-7">
 													<div className="flex items-center gap-1 text-slate-500">
 														<PlayCircle size={11} className="text-slate-400" />
-														{order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}
+														{formatDateToRu(order.created_at)}
 													</div>
 													<div className={`flex items-center gap-1 ${getDeadlineStyles(item.deadline)}`}>
 														<Flag size={11} />
-														{item.deadline ? new Date(item.deadline).toLocaleDateString('ru-RU') : '—'}
+														{formatDateToRu(item.deadline)}
 													</div>
 													{item.responsible_user && (
 														<div className="flex items-center gap-1 text-slate-500">
@@ -650,8 +662,8 @@ export default function OrdersPage() {
 																		<div className="font-black text-sm tracking-tight">{item.name} <span className="text-slate-500 font-medium ml-1">x{item.quantity}</span></div>
 
 																		<div className="flex flex-col text-xs sm:text-[13px] font-black ml-1 sm:ml-4 border-l-2 border-slate-200/50 pl-4 space-y-1">
-																			<div className="flex items-center gap-2 text-slate-500"><PlayCircle size={14} className="text-slate-400" /> {order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}</div>
-																			<div className={`flex items-center gap-2 ${getDeadlineStyles(item.deadline)}`}><Flag size={14} /> {item.deadline ? new Date(item.deadline).toLocaleDateString('ru-RU') : '—'}</div>
+																			<div className="flex items-center gap-2 text-slate-500"><PlayCircle size={14} className="text-slate-400" /> {formatDateToRu(order.created_at)}</div>
+																			<div className={`flex items-center gap-2 ${getDeadlineStyles(item.deadline)}`}><Flag size={14} /> {formatDateToRu(item.deadline)}</div>
 																		</div>
 
 																		<div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-700 ml-4 bg-white/70 px-2.5 py-1.5 rounded-lg border border-slate-100/80 shadow-inner">

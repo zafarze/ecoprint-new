@@ -87,7 +87,14 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 
 	const formatDate = (dateStr?: string) => {
 		if (!dateStr) return '—';
-		return new Date(dateStr).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+		const d = new Date(dateStr);
+		if (isNaN(d.getTime())) return '—';
+		const day = String(d.getDate()).padStart(2, '0');
+		const month = String(d.getMonth() + 1).padStart(2, '0');
+		const year = d.getFullYear();
+		const hours = String(d.getHours()).padStart(2, '0');
+		const minutes = String(d.getMinutes()).padStart(2, '0');
+		return `${day}.${month}.${year} ${hours}:${minutes}`;
 	};
 
 	// 🛠 ПУНКТ 4: Название как на макете
