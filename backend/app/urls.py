@@ -36,6 +36,9 @@ urlpatterns = [
     path('settings/notifications/', views.notification_settings, name='app-settings-notifications'),
     
     path('profile/change-password/', views.change_password, name='app-change-password'),
+    path('profile/upload-avatar/', views.upload_avatar, name='app-upload-avatar'),
+    path('profile/me/', views.get_profile, name='app-get-profile'),
+    path('profile/update/', views.update_profile, name='app-update-profile'),
     path('orders/poll/', views.poll_new_orders, name='app-poll-orders'),
     
     # ==========================================

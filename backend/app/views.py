@@ -531,6 +531,67 @@ def notification_settings(request):
         profile.save()
         return Response({'message': 'Настройки сохранены'})
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_profile(request):
+    """Returns current user profile data including avatar URL."""
+    user = request.user
+    profile = user.profile
+    avatar_url = None
+    if profile.avatar and hasattr(profile.avatar, 'url'):
+        try:
+            avatar_url = request.build_absolute_uri(profile.avatar.url)
+        except Exception:
+            avatar_url = None
+    return Response({
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'username': user.username,
+        'avatar_url': avatar_url,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_avatar(request):
+    """Accepts multipart/form-data with a file field named 'avatar'."""
+    from rest_framework import status as drf_status
+
+    avatar_file = request.FILES.get('avatar')
+    if not avatar_file:
+        return Response({'error': 'Файл не предоставлен'}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+    # Проверяем размер (5 MB max)
+    if avatar_file.size > 5 * 1024 * 1024:
+        return Response({'error': 'Файл слишком большой. Максимально 5 MB.'}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+    # Проверяем тип файла
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if avatar_file.content_type not in allowed_types:
+        return Response({'error': 'Допустимые форматы: JPG, PNG, GIF, WEBP'}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+    profile = request.user.profile
+    profile.avatar = avatar_file
+    profile.save(update_fields=['avatar'])
+
+    avatar_url = request.build_absolute_uri(profile.avatar.url)
+    return Response({'avatar_url': avatar_url, 'message': 'Фото успешно обновлено!'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    """Updates first_name and last_name for the current user."""
+    from rest_framework import status as drf_status
+    user = request.user
+    user.first_name = request.data.get('first_name', user.first_name)
+    user.last_name = request.data.get('last_name', user.last_name)
+    user.save(update_fields=['first_name', 'last_name'])
+    # Обновляем localStorage данные (фронтенд прочитает ответ)
+    return Response({'message': 'Профиль обновлён', 'first_name': user.first_name, 'last_name': user.last_name}, status=drf_status.HTTP_200_OK)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def poll_new_orders(request):

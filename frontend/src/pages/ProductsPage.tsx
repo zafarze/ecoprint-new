@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProductModal from '../modals/ProductModal';
-import ConfirmDeleteModal from '../modals/ConfirmDeleteModal'; // Добавили красивую модалку удаления
+import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 
 // Словарь для красивого отображения категорий с цветами
 const categoryConfig: Record<string, { label: string, colorClass: string }> = {
@@ -20,16 +20,13 @@ export default function ProductsPage() {
 	const [products, setProducts] = useState<any[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 
-	// Состояния для модального окна редактирования
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [editingProduct, setEditingProduct] = useState<any>(null);
 
-	// Состояния для модального окна удаления
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 	const [productToDelete, setProductToDelete] = useState<any>(null);
 
 	const fetchProducts = async () => {
-		// 🔥 МАГИЯ КЭША
 		const cached = localStorage.getItem('cached_products');
 		if (cached) {
 			setProducts(JSON.parse(cached));
@@ -40,12 +37,10 @@ export default function ProductsPage() {
 
 		const token = localStorage.getItem('token');
 		try {
-			// ИЗМЕНЕНО: Используем переменную окружения
 			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/products/`, {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 
-			// Обрабатываем протухший токен
 			if (res.status === 401) {
 				localStorage.removeItem('token');
 				navigate('/login');
@@ -54,7 +49,6 @@ export default function ProductsPage() {
 
 			if (res.ok) {
 				const data = await res.json();
-				// Обновляем кэш и стейт
 				localStorage.setItem('cached_products', JSON.stringify(data));
 				setProducts(data);
 			}
@@ -77,7 +71,6 @@ export default function ProductsPage() {
 
 	const handleSaveProduct = async (productData: any) => {
 		const token = localStorage.getItem('token');
-		// ИЗМЕНЕНО: Используем переменную окружения
 		const url = editingProduct
 			? `${import.meta.env.VITE_API_URL}/api/products/${editingProduct.id}/`
 			: `${import.meta.env.VITE_API_URL}/api/products/`;
@@ -106,13 +99,11 @@ export default function ProductsPage() {
 		}
 	};
 
-	// Открываем модалку удаления
 	const handleDeleteClick = (product: any) => {
 		setProductToDelete(product);
 		setIsDeleteModalOpen(true);
 	};
 
-	// Подтверждаем удаление (вызывается из модалки)
 	const confirmDelete = async () => {
 		if (!productToDelete) return;
 
@@ -120,7 +111,6 @@ export default function ProductsPage() {
 		const deleteToast = toast.loading('Удаление...');
 
 		try {
-			// ИЗМЕНЕНО: Используем переменную окружения
 			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/products/${productToDelete.id}/`, {
 				method: 'DELETE',
 				headers: { 'Authorization': `Bearer ${token}` }
@@ -152,8 +142,72 @@ export default function ProductsPage() {
 				</Button>
 			</div>
 
-			{/* Таблица */}
-			<Card noPadding className="overflow-hidden">
+			{/* ── МОБИЛЬНЫЕ КАРТОЧКИ (только < md) ── */}
+			<div className="md:hidden">
+				{isLoading ? (
+					<div className="flex flex-col items-center justify-center py-20 gap-3">
+						<Loader2 className="animate-spin text-primary" size={32} />
+						<p className="text-slate-400 font-bold text-sm">Загрузка каталога...</p>
+					</div>
+				) : products.length === 0 ? (
+					<div className="flex flex-col items-center justify-center py-20 gap-3">
+						<PackageSearch className="text-slate-200" size={48} strokeWidth={1.5} />
+						<p className="text-slate-500 font-bold">В каталоге пока нет товаров</p>
+					</div>
+				) : (
+					<div className="grid grid-cols-1 gap-3">
+						{products.map((item) => {
+							const category = categoryConfig[item.category] || { label: item.category, colorClass: 'bg-slate-100 text-slate-700 border-slate-200' };
+							return (
+								<Card key={item.id} className="p-4">
+									<div className="flex items-start gap-3">
+										{/* Иконка товара */}
+										<div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+											<i className={`${item.icon || 'fas fa-box'} text-primary text-xl`}></i>
+										</div>
+
+										{/* Основная информация */}
+										<div className="flex-1 min-w-0">
+											<p className="font-black text-slate-800 text-base leading-tight truncate">{item.name}</p>
+											<div className="flex flex-wrap items-center gap-2 mt-1.5">
+												<span className={`px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider border ${category.colorClass}`}>
+													{category.label}
+												</span>
+												{item.icon && (
+													<span className="text-xs font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md truncate max-w-[140px]">
+														{item.icon}
+													</span>
+												)}
+											</div>
+										</div>
+
+										{/* Кнопки действий — всегда видны на мобильном */}
+										<div className="flex gap-2 flex-shrink-0">
+											<button
+												onClick={() => openModal(item)}
+												className="p-2.5 bg-white text-slate-400 hover:text-primary hover:border-primary border border-slate-200 rounded-xl shadow-sm transition-colors active:scale-95"
+												title="Редактировать"
+											>
+												<Edit2 size={16} strokeWidth={2.5} />
+											</button>
+											<button
+												onClick={() => handleDeleteClick(item)}
+												className="p-2.5 bg-white text-slate-400 hover:text-red-500 hover:border-red-500 border border-slate-200 rounded-xl shadow-sm transition-colors active:scale-95"
+												title="Удалить"
+											>
+												<Trash2 size={16} strokeWidth={2.5} />
+											</button>
+										</div>
+									</div>
+								</Card>
+							);
+						})}
+					</div>
+				)}
+			</div>
+
+			{/* ── ДЕСКТОПНАЯ ТАБЛИЦА (только ≥ md) ── */}
+			<Card noPadding className="overflow-hidden hidden md:block">
 				<div className="overflow-x-auto custom-scrollbar">
 					<table className="w-full text-left border-collapse min-w-[600px]">
 						<thead>
@@ -238,7 +292,7 @@ export default function ProductsPage() {
 				initialData={editingProduct}
 			/>
 
-			{/* Новая модалка подтверждения удаления */}
+			{/* Модалка подтверждения удаления */}
 			<ConfirmDeleteModal
 				isOpen={isDeleteModalOpen}
 				onClose={() => setIsDeleteModalOpen(false)}

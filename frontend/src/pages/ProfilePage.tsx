@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { UserCircle, Save, Camera, KeyRound, ShieldCheck } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { UserCircle, Save, Camera, KeyRound, ShieldCheck, Loader2 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input, Label } from '../components/ui/Form';
@@ -9,42 +9,111 @@ import api from '../api/api';
 export default function ProfilePage() {
 	const [firstName, setFirstName] = useState('');
 	const [lastName, setLastName] = useState('');
+	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+	const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+	const [isSavingProfile, setIsSavingProfile] = useState(false);
 
 	const [newPassword, setNewPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	// Достаем имя из localStorage (как ты делал в шапке)
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	// Загружаем данные профиля с сервера (включая аватар)
 	useEffect(() => {
+		// Сначала быстро показываем из localStorage
 		const userStr = localStorage.getItem('user');
 		if (userStr) {
 			const user = JSON.parse(userStr);
-			setFirstName(user.first_name || user.username || 'Иван');
-			setLastName(user.last_name || 'Иванов');
+			setFirstName(user.first_name || user.username || '');
+			setLastName(user.last_name || '');
 		}
+
+		// Потом подгружаем актуальный аватар с сервера
+		api.get('profile/me/')
+			.then(res => {
+				if (res.data.avatar_url) {
+					setAvatarUrl(res.data.avatar_url);
+				}
+				setFirstName(res.data.first_name || res.data.username || '');
+				setLastName(res.data.last_name || '');
+			})
+			.catch(() => {/* молча игнорируем */});
 	}, []);
 
-	const handleProfileSubmit = (e: React.FormEvent) => {
+	// Обработчик выбора файла
+	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!file) return;
+
+		// Мгновенный превью
+		const localUrl = URL.createObjectURL(file);
+		setAvatarUrl(localUrl);
+
+		setIsUploadingAvatar(true);
+		const loadingToast = toast.loading('Загружаю фото...');
+
+		try {
+			const formData = new FormData();
+			formData.append('avatar', file);
+
+			const res = await api.post('profile/upload-avatar/', formData, {
+				headers: { 'Content-Type': 'multipart/form-data' },
+			});
+
+			setAvatarUrl(res.data.avatar_url);
+			toast.success('Фото профиля обновлено!', { id: loadingToast });
+		} catch (err: any) {
+			const msg = err.response?.data?.error || 'Ошибка при загрузке фото';
+			toast.error(msg, { id: loadingToast });
+			// Откатываем превью если ошибка
+			setAvatarUrl(null);
+		} finally {
+			setIsUploadingAvatar(false);
+			// Сбрасываем input чтобы можно было выбрать тот же файл снова
+			if (fileInputRef.current) fileInputRef.current.value = '';
+		}
+	};
+
+	const handleProfileSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		// TODO: API звонок для сохранения профиля
-		toast.success("Профиль успешно сохранен!");
+		setIsSavingProfile(true);
+		try {
+			const res = await api.post('profile/update/', {
+				first_name: firstName,
+				last_name: lastName,
+			});
+			// Обновляем localStorage
+			const userStr = localStorage.getItem('user');
+			if (userStr) {
+				const user = JSON.parse(userStr);
+				user.first_name = res.data.first_name;
+				user.last_name = res.data.last_name;
+				localStorage.setItem('user', JSON.stringify(user));
+			}
+			toast.success('Профиль успешно сохранён!');
+		} catch {
+			toast.error('Ошибка при сохранении профиля');
+		} finally {
+			setIsSavingProfile(false);
+		}
 	};
 
 	const handlePasswordChange = async (e: React.FormEvent) => {
 		e.preventDefault();
 		
 		if (!newPassword || !confirmPassword) {
-			toast.error("Пожалуйста, заполните все поля");
+			toast.error('Пожалуйста, заполните все поля');
 			return;
 		}
 		
 		if (newPassword !== confirmPassword) {
-			toast.error("Новые пароли не совпадают");
+			toast.error('Новые пароли не совпадают');
 			return;
 		}
 
 		if (newPassword.length < 6) {
-			toast.error("Новый пароль должен содержать минимум 6 символов");
+			toast.error('Новый пароль должен содержать минимум 6 символов');
 			return;
 		}
 
@@ -53,16 +122,18 @@ export default function ProfilePage() {
 			await api.post('/profile/change-password/', {
 				new_password: newPassword
 			});
-			toast.success("Пароль успешно обновлен!");
+			toast.success('Пароль успешно обновлен!');
 			setNewPassword('');
 			setConfirmPassword('');
 		} catch (error: any) {
-			const errorMsg = error.response?.data?.error || "Произошла ошибка при смене пароля";
+			const errorMsg = error.response?.data?.error || 'Произошла ошибка при смене пароля';
 			toast.error(errorMsg);
 		} finally {
 			setIsSubmitting(false);
 		}
 	};
+
+	const initials = (firstName.charAt(0) || '?').toUpperCase();
 
 	return (
 		<div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -80,20 +151,53 @@ export default function ProfilePage() {
 
 					{/* Аватарка */}
 					<div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-slate-100">
-						<div className="relative group cursor-pointer">
-							<div className="w-28 h-28 rounded-full bg-gradient-eco text-white flex items-center justify-center text-4xl font-black shadow-lg">
-								{firstName.charAt(0).toUpperCase()}
+						{/* Скрытый input для файла */}
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept="image/jpeg,image/png,image/gif,image/webp"
+							className="hidden"
+							onChange={handleFileChange}
+						/>
+
+						{/* Кликабельный аватар */}
+						<div
+							className="relative group cursor-pointer shrink-0"
+							onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
+							title="Нажмите чтобы изменить фото"
+						>
+							<div className="w-28 h-28 rounded-full overflow-hidden bg-gradient-eco text-white flex items-center justify-center text-4xl font-black shadow-lg">
+								{avatarUrl ? (
+									<img
+										src={avatarUrl}
+										alt="Аватар"
+										className="w-full h-full object-cover"
+										onError={() => setAvatarUrl(null)}
+									/>
+								) : (
+									initials
+								)}
 							</div>
 							{/* Затемнение при наведении */}
-							<div className="absolute inset-0 bg-slate-900/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-								<Camera className="text-white" size={24} />
+							<div className="absolute inset-0 bg-slate-900/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+								{isUploadingAvatar
+									? <Loader2 className="text-white animate-spin" size={24} />
+									: <Camera className="text-white" size={24} />
+								}
 							</div>
 						</div>
+
 						<div className="text-center sm:text-left">
 							<h3 className="text-lg font-black text-slate-800">Фото профиля</h3>
 							<p className="text-sm font-bold text-slate-400 mb-3">PNG, JPG или GIF до 5 MB</p>
-							<Button type="button" variant="outline" className="py-2 px-4 text-xs">
-								Изменить фото
+							<Button
+								type="button"
+								variant="outline"
+								className="py-2 px-4 text-xs"
+								onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
+								disabled={isUploadingAvatar}
+							>
+								{isUploadingAvatar ? 'Загружаю...' : 'Изменить фото'}
 							</Button>
 						</div>
 					</div>
@@ -119,8 +223,8 @@ export default function ProfilePage() {
 					</div>
 
 					<div className="pt-4 flex justify-end">
-						<Button type="submit" icon={<Save size={18} />}>
-							Сохранить данные
+						<Button type="submit" icon={<Save size={18} />} disabled={isSavingProfile}>
+							{isSavingProfile ? 'Сохранение...' : 'Сохранить данные'}
 						</Button>
 					</div>
 
@@ -158,7 +262,7 @@ export default function ProfilePage() {
 
 						<div className="pt-4 flex">
 							<Button type="submit" disabled={isSubmitting} variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50" icon={<ShieldCheck size={18} />}>
-								{isSubmitting ? "Обновление..." : "Обновить пароль"}
+								{isSubmitting ? 'Обновление...' : 'Обновить пароль'}
 							</Button>
 						</div>
 

@@ -333,89 +333,239 @@ export default function OrdersPage() {
 	return (
 		<div className="space-y-6">
 
-			<Card className="flex flex-col gap-5 shadow-sm border-slate-200/60 p-5 sm:p-6">
-				<div className="flex justify-between items-center mb-1">
-					<h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
-						<Filter size={20} className="text-slate-800" strokeWidth={2.5} /> Фильтры и поиск
+			<Card className="flex flex-col gap-3 shadow-sm border-slate-200/60 p-4">
+				{/* ── Заголовок + кнопка в одну строку ── */}
+				<div className="flex justify-between items-center gap-3">
+					<h2 className="text-base font-black text-slate-800 flex items-center gap-2 shrink-0">
+						<Filter size={18} className="text-slate-800" strokeWidth={2.5} /> Фильтры
 					</h2>
-					<Button onClick={() => { setEditingOrder(null); setIsModalOpen(true); }} icon={<Plus size={18} strokeWidth={3} />} className="shrink-0 shadow-md hover:shadow-lg transition-all text-sm py-2 sm:px-5">
+					<Button onClick={() => { setEditingOrder(null); setIsModalOpen(true); }} icon={<Plus size={16} strokeWidth={3} />} className="shrink-0 shadow-md text-sm py-2 px-4">
 						Новый заказ
 					</Button>
 				</div>
 
-				<div className="flex flex-col xl:flex-row gap-3">
-					<div className="relative flex-1">
-						<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} strokeWidth={2.5} />
-						<Input className="pl-11 rounded-full bg-white border-slate-200 h-[44px]" placeholder="Поиск по клиенту, номеру или товару..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-					</div>
-
-					<div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0 hide-scrollbar shrink-0">
-
-						{deadlineFilter === 'overdue' && (
-							<div className="px-4 h-[44px] rounded-full text-sm font-black flex items-center gap-2 border bg-rose-100 text-rose-700 border-rose-300 shadow-sm">
-								<AlertCircle size={16} /> Просрочено
-							</div>
-						)}
-						{deadlineFilter === 'today' && (
-							<div className="px-4 h-[44px] rounded-full text-sm font-black flex items-center gap-2 border bg-red-50 text-red-600 border-red-200 shadow-sm">
-								<Calendar size={16} /> На сегодня
-							</div>
-						)}
-						{deadlineFilter === 'tomorrow' && (
-							<div className="px-4 h-[44px] rounded-full text-sm font-black flex items-center gap-2 border bg-amber-50 text-amber-600 border-amber-200 shadow-sm">
-								<Clock size={16} /> На завтра
-							</div>
-						)}
-
-						<button onClick={() => setActiveStatus(activeStatus === 'ready' ? null : 'ready')} className={`px-4 h-[44px] rounded-full text-sm font-bold flex items-center gap-2 border transition-all ${activeStatus === 'ready' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
-							<CheckCircle2 size={16} className="text-slate-400" /> Готовые
-						</button>
-						<button onClick={() => setActiveStatus(activeStatus === 'in-progress' ? null : 'in-progress')} className={`px-4 h-[44px] rounded-full text-sm font-bold flex items-center gap-2 border transition-all ${activeStatus === 'in-progress' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
-							<Loader2 size={16} className="text-slate-400" /> В процессе
-						</button>
-						<button onClick={() => setActiveStatus(activeStatus === 'not-ready' ? null : 'not-ready')} className={`px-4 h-[44px] rounded-full text-sm font-bold flex items-center gap-2 border transition-all ${activeStatus === 'not-ready' ? 'bg-slate-200 text-slate-800 border-slate-300 shadow-inner' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
-							<Clock size={16} className="text-slate-400" /> Не готовые
-						</button>
-
-						{(activeStatus || searchQuery || activeProduct || deadlineFilter) && (
-							<button onClick={() => {
-								setActiveStatus(null);
-								setSearchQuery('');
-								setActiveProduct(null);
-								if (deadlineFilter) setSearchParams({});
-							}} className="w-11 h-[44px] rounded-full border border-slate-300 border-dashed flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0 transition-colors" title="Сбросить все фильтры">
-								<X size={16} strokeWidth={2.5} />
-							</button>
-						)}
-					</div>
+				{/* ── Поиск ── */}
+				<div className="relative">
+					<Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} strokeWidth={2.5} />
+					<Input className="pl-10 rounded-full bg-white border-slate-200 h-[38px] text-sm" placeholder="Поиск по клиенту, номеру или товару..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
 				</div>
 
-				<div className="flex items-center gap-4 pt-2">
-					<div className="flex items-center gap-2 text-sm font-black text-slate-500 shrink-0">
-						<PackageOpen size={18} strokeWidth={2.5} /> В работе:
-					</div>
-					<div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar flex-1">
-						{dynamicProducts.length === 0 ? (
-							<span className="text-xs text-slate-400 font-bold">Спискок товаров пуст</span>
-						) : (
-							dynamicProducts.map((p) => (
-								<button
-									key={p.id}
-									onClick={() => setActiveProduct(activeProduct === p.name ? null : p.name)}
-									className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] font-bold whitespace-nowrap transition-colors border ${activeProduct === p.name
-										? 'bg-primary text-white border-primary shadow-sm'
-										: 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-										}`}
-								>
-									<i className={`${p.icon || 'fas fa-tag'} ${activeProduct === p.name ? 'text-white/90' : 'text-primary'}`}></i> {p.name}
-								</button>
-							))
-						)}
-					</div>
+				{/* ── Все фильтры в одну горизонтальную полосу ── */}
+				<div className="flex items-center gap-2 overflow-x-auto pb-0.5 hide-scrollbar">
+					{deadlineFilter === 'overdue' && <div className="px-3 h-[34px] rounded-full text-xs font-black flex items-center gap-1.5 border bg-rose-100 text-rose-700 border-rose-300 shrink-0"><AlertCircle size={13} /> Просрочено</div>}
+					{deadlineFilter === 'today' && <div className="px-3 h-[34px] rounded-full text-xs font-black flex items-center gap-1.5 border bg-red-50 text-red-600 border-red-200 shrink-0"><Calendar size={13} /> Сегодня</div>}
+					{deadlineFilter === 'tomorrow' && <div className="px-3 h-[34px] rounded-full text-xs font-black flex items-center gap-1.5 border bg-amber-50 text-amber-600 border-amber-200 shrink-0"><Clock size={13} /> Завтра</div>}
+
+					<button onClick={() => setActiveStatus(activeStatus === 'ready' ? null : 'ready')} className={`px-3 h-[34px] rounded-full text-xs font-bold flex items-center gap-1.5 border transition-all shrink-0 ${activeStatus === 'ready' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+						<CheckCircle2 size={13} /> Готовые
+					</button>
+					<button onClick={() => setActiveStatus(activeStatus === 'in-progress' ? null : 'in-progress')} className={`px-3 h-[34px] rounded-full text-xs font-bold flex items-center gap-1.5 border transition-all shrink-0 ${activeStatus === 'in-progress' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+						<Loader2 size={13} /> В процессе
+					</button>
+					<button onClick={() => setActiveStatus(activeStatus === 'not-ready' ? null : 'not-ready')} className={`px-3 h-[34px] rounded-full text-xs font-bold flex items-center gap-1.5 border transition-all shrink-0 ${activeStatus === 'not-ready' ? 'bg-slate-200 text-slate-800 border-slate-300' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+						<Clock size={13} /> Не готовые
+					</button>
+
+					{dynamicProducts.length > 0 && <div className="w-px h-5 bg-slate-200 shrink-0 mx-1" />}
+
+					{dynamicProducts.map((p) => (
+						<button
+							key={p.id}
+							onClick={() => setActiveProduct(activeProduct === p.name ? null : p.name)}
+							className={`flex items-center gap-1.5 px-3 h-[34px] rounded-full text-xs font-bold whitespace-nowrap transition-colors border shrink-0 ${activeProduct === p.name ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'}`}
+						>
+							<i className={`${p.icon || 'fas fa-tag'} ${activeProduct === p.name ? 'text-white/90' : 'text-primary'} text-[11px]`}></i> {p.name}
+						</button>
+					))}
+
+					{(activeStatus || searchQuery || activeProduct || deadlineFilter) && (
+						<button onClick={() => { setActiveStatus(null); setSearchQuery(''); setActiveProduct(null); if (deadlineFilter) setSearchParams({}); }} className="w-[34px] h-[34px] rounded-full border border-slate-300 border-dashed flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0 transition-colors ml-auto" title="Сбросить">
+							<X size={14} strokeWidth={2.5} />
+						</button>
+					)}
 				</div>
 			</Card>
 
-			<Card noPadding className="overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
+
+
+			{/* ═══════════════════════════════════════════════════════
+			    📱 МОБИЛЬНЫЕ КАРТОЧКИ — видны только на < lg
+			    ═══════════════════════════════════════════════════════ */}
+			<div className="lg:hidden space-y-3">
+				{isLoading ? (
+					<div className="py-20 flex justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>
+				) : (!Array.isArray(paginatedOrders) || paginatedOrders.length === 0) ? (
+					<div className="py-20 flex flex-col items-center">
+						<PackageOpen className="text-slate-200" size={48} />
+						<p className="text-slate-400 font-medium mt-4">Ничего не найдено</p>
+					</div>
+				) : (
+					paginatedOrders.map((order, orderIndex) => {
+						const isOrderOverdue = Array.isArray(order.items) && order.items.some((i: any) => i.status !== 'ready' && i.deadline && i.deadline < getLocalDateStr(0));
+						const orderNum = ((currentPage - 1) * itemsPerPage) + orderIndex + 1;
+
+						return (
+							<div
+								key={order.id}
+								className={`rounded-2xl border-2 shadow-sm overflow-hidden ${
+									order.status === 'ready'
+										? 'border-emerald-200 bg-emerald-50/40'
+										: isOrderOverdue
+											? 'border-rose-400 bg-rose-50/40 ring-2 ring-rose-300/40'
+											: order.status === 'in-progress'
+												? 'border-orange-200 bg-orange-50/20'
+												: 'border-slate-200 bg-white'
+								}`}
+							>
+								{/* ── Шапка карточки ── */}
+								<div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+									<div className="flex items-center gap-3 min-w-0">
+										{/* Номер-аватар */}
+										<div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-sm ${
+											order.status === 'ready' ? 'bg-emerald-500 text-white' :
+											isOrderOverdue ? 'bg-rose-500 text-white animate-pulse' :
+											order.status === 'in-progress' ? 'bg-orange-500 text-white' :
+											'bg-slate-200 text-slate-700'
+										}`}>
+											#{orderNum}
+										</div>
+										<div className="min-w-0">
+											<div
+												onClick={() => { navigator.clipboard.writeText(order.client); toast.success('Имя клиента скопировано!'); }}
+												className="font-black text-slate-900 text-base leading-tight truncate cursor-pointer active:opacity-60"
+											>
+												{order.client}
+											</div>
+											{order.client_phone ? (
+												<div
+													onClick={() => { navigator.clipboard.writeText(order.client_phone); toast.success('Телефон скопирован!'); }}
+													className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mt-0.5 cursor-pointer active:opacity-60"
+												>
+													<Phone size={11} /> {order.client_phone}
+												</div>
+											) : (
+												<div className="text-xs text-slate-400 mt-0.5">ID:{order.id}</div>
+											)}
+										</div>
+									</div>
+
+									{/* Правый блок: бейдж + кнопки */}
+									<div className="flex flex-col items-end gap-2 shrink-0">
+										{order.status === 'ready' ? (
+											<span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-700 uppercase">Готово</span>
+										) : isOrderOverdue ? (
+											<span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-700 uppercase animate-pulse">Просрочено</span>
+										) : order.status === 'in-progress' ? (
+											<span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-orange-100 text-orange-600 uppercase">В процессе</span>
+										) : (
+											<span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-200 text-slate-600 uppercase">Не готов</span>
+										)}
+										<div className="flex items-center gap-1.5">
+											<button onClick={() => { setEditingOrder(order); setIsModalOpen(true); }} className="w-9 h-9 rounded-xl border-2 border-slate-200 bg-white flex items-center justify-center text-slate-500 active:bg-slate-100" title="Редактировать"><Edit2 size={15} /></button>
+											<button onClick={() => handleArchiveOrder(order.id)} className="w-9 h-9 rounded-xl border-2 border-slate-200 bg-white flex items-center justify-center text-slate-500 active:bg-purple-50" title="В архив"><Archive size={15} /></button>
+											<button onClick={() => { setOrderToDelete(order); setIsDeleteModalOpen(true); }} className="w-9 h-9 rounded-xl border-2 border-slate-200 bg-white flex items-center justify-center text-slate-500 active:bg-red-50 active:border-red-300 active:text-red-500" title="Удалить"><Trash2 size={15} /></button>
+										</div>
+									</div>
+								</div>
+
+								{/* ── Список товаров ── */}
+								<div className="px-4 pb-3 space-y-2">
+									{Array.isArray(order.items) && order.items.map((item: any, idx: number) => {
+										let mCardStyle = CARD_STYLES[item.status] || CARD_STYLES['not-ready'];
+										let mBadgeStyle = BADGE_STYLES[item.status] || BADGE_STYLES['not-ready'];
+										const mBadgeLabel = BADGE_LABELS[item.status] || 'Статус';
+
+										if (item.status !== 'ready' && item.deadline) {
+											const todayStr = getLocalDateStr(0);
+											if (item.deadline < todayStr) {
+												mCardStyle = 'bg-rose-100 border-rose-400 text-rose-950 shadow-md ring-2 ring-rose-400';
+												mBadgeStyle = 'bg-rose-600 text-white';
+											} else if (item.deadline === todayStr) {
+												mCardStyle = 'bg-red-50/80 border-red-300 text-red-950 shadow-sm ring-1 ring-red-200';
+											}
+										}
+
+										return (
+											<div key={item.id} className={`rounded-xl border-2 p-3 ${mCardStyle}`}>
+												{/* Название + количество */}
+												<div className="flex items-center gap-2 mb-2">
+													<div className="w-5 h-5 rounded-full bg-white border border-slate-200 text-primary flex items-center justify-center text-[10px] font-black shrink-0 shadow-inner">{idx + 1}</div>
+													<div className="font-black text-sm leading-tight flex-1">{item.name} <span className="font-medium text-slate-500 text-xs">×{item.quantity}</span></div>
+												</div>
+												{/* Даты + ответственный */}
+												<div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold mb-2.5 pl-7">
+													<div className="flex items-center gap-1 text-slate-500">
+														<PlayCircle size={11} className="text-slate-400" />
+														{order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}
+													</div>
+													<div className={`flex items-center gap-1 ${getDeadlineStyles(item.deadline)}`}>
+														<Flag size={11} />
+														{item.deadline ? new Date(item.deadline).toLocaleDateString('ru-RU') : '—'}
+													</div>
+													{item.responsible_user && (
+														<div className="flex items-center gap-1 text-slate-500">
+															<User size={11} className="text-slate-400" />
+															{item.responsible_user.first_name || item.responsible_user.username}
+														</div>
+													)}
+												</div>
+												{/* Комментарий */}
+												{item.comment && (
+													<div className="flex items-start gap-1.5 text-xs font-medium text-slate-600 pl-7 mb-2.5">
+														<MessageSquare size={11} className="mt-0.5 shrink-0 text-slate-400" />
+														<span>{item.comment}</span>
+													</div>
+												)}
+												{/* Большая кнопка статуса — удобна для пальца */}
+												<button
+													onClick={() => handleToggleItemStatus(item, order.id)}
+													className={`w-full py-2.5 rounded-lg text-xs font-black uppercase tracking-wider active:scale-95 transition-transform ${mBadgeStyle}`}
+												>
+													{mBadgeLabel}
+												</button>
+											</div>
+										);
+									})}
+								</div>
+
+								{/* ── Кнопка выдачи (менеджерам, только когда готово) ── */}
+								{canIssueOrders && order.status === 'ready' && (
+									<div className="px-4 pb-4">
+										<button
+											onClick={() => handleToggleReceived(order)}
+											className={`w-full py-3 rounded-xl text-sm font-black active:scale-95 transition-transform ${
+												order.is_received
+													? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-200'
+													: 'bg-rose-100 text-rose-700 border-2 border-rose-200'
+											}`}
+										>
+											{order.is_received ? '✓ Клиент получил' : '📦 Выдать клиенту'}
+										</button>
+									</div>
+								)}
+							</div>
+						);
+					})
+				)}
+
+				{/* Мобильная пагинация */}
+				{totalPages > 1 && (
+					<div className="flex items-center justify-between pt-2 pb-4 px-1">
+						<button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 bg-white text-slate-600 font-bold disabled:opacity-40 active:bg-slate-100 text-sm">
+							<ChevronLeft size={16} /> Назад
+						</button>
+						<span className="text-sm font-black text-slate-600">{currentPage} / {totalPages}</span>
+						<button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 bg-white text-slate-600 font-bold disabled:opacity-40 active:bg-slate-100 text-sm">
+							Вперёд <ChevronRight size={16} />
+						</button>
+					</div>
+				)}
+			</div>
+
+			{/* ═══════════════════════════════════════════════════════
+			    🖥️ ТАБЛИЦА — видна только на lg+
+			    ═══════════════════════════════════════════════════════ */}
+			<Card noPadding className="hidden lg:flex overflow-hidden border-slate-200/60 shadow-sm flex-col">
 				<div className="overflow-x-auto custom-scrollbar flex-1 pb-2">
 					<table className="w-full text-left border-collapse min-w-[950px]">
 						<thead>
