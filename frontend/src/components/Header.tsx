@@ -17,19 +17,21 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
 	const [deadlineStats, setDeadlineStats] = useState({ today: 0, tomorrow: 0, overdue: 0 });
 
-	const userStr = localStorage.getItem('user');
-	const username = userStr ? JSON.parse(userStr).username : 'Admin';
-	const userInitial = username.charAt(0).toUpperCase();
+	const [userData, setUserData] = useState(() => {
+		const userStr = localStorage.getItem('user');
+		return userStr ? JSON.parse(userStr) : { username: 'Admin' };
+	});
 
 	useEffect(() => {
-		function handleClickOutside(event: MouseEvent) {
-			if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-				setIsProfileOpen(false);
-			}
-		}
-		document.addEventListener('mousedown', handleClickOutside);
-		return () => document.removeEventListener('mousedown', handleClickOutside);
+		const updateProfile = () => {
+			const userStr = localStorage.getItem('user');
+			if (userStr) setUserData(JSON.parse(userStr));
+		};
+		window.addEventListener('profile-updated', updateProfile);
+		return () => window.removeEventListener('profile-updated', updateProfile);
 	}, []);
+
+	const userInitial = (userData.first_name || userData.username || 'A').charAt(0).toUpperCase();
 
 	useEffect(() => {
 		// 🔥 Обновленная функция с использованием api.ts
@@ -130,17 +132,23 @@ export default function Header({ onMenuClick }: HeaderProps) {
 					<div className="w-px h-8 bg-slate-200 mx-1 hidden sm:block"></div>
 
 					<div className="relative" ref={dropdownRef}>
-						<button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full bg-gradient-eco text-white font-black flex items-center justify-center text-lg shadow-md hover:shadow-lg hover:shadow-primary/30 hover:scale-105 transition-all outline-none focus:ring-4 focus:ring-primary/20">
-							{userInitial}
+						<button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full bg-gradient-eco text-white font-black flex items-center justify-center text-lg shadow-md hover:shadow-lg hover:shadow-primary/30 hover:scale-105 transition-all outline-none focus:ring-4 focus:ring-primary/20 overflow-hidden">
+							{userData.avatar_url ? (
+								<img src={userData.avatar_url} alt="" className="w-full h-full object-cover" />
+							) : userInitial}
 						</button>
 
 						{isProfileOpen && (
 							<div className="absolute right-0 mt-3 w-64 bg-white rounded-3xl shadow-eco-xl border border-slate-100 py-3 z-50 animate-in fade-in slide-in-from-top-4 duration-200">
 								<div className="px-5 py-3 border-b border-slate-50 mb-2 flex items-center gap-3">
-									<div className="w-12 h-12 rounded-full bg-gradient-eco text-white font-black flex items-center justify-center text-xl shadow-inner">{userInitial}</div>
-									<div>
-										<p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Администратор</p>
-										<p className="text-sm font-black text-slate-800 truncate">{username}</p>
+									<div className="w-12 h-12 rounded-full bg-gradient-eco text-white font-black flex items-center justify-center text-xl shadow-inner overflow-hidden">
+										{userData.avatar_url ? (
+											<img src={userData.avatar_url} alt="" className="w-full h-full object-cover" />
+										) : userInitial}
+									</div>
+									<div className="min-w-0">
+										<p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{userData.role || 'Пользователь'}</p>
+										<p className="text-sm font-black text-slate-800 truncate">{userData.first_name || userData.username}</p>
 									</div>
 								</div>
 

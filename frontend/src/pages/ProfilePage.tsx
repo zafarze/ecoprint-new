@@ -32,11 +32,23 @@ export default function ProfilePage() {
 		// Потом подгружаем актуальный аватар с сервера
 		api.get('profile/me/')
 			.then(res => {
-				if (res.data.avatar_url) {
-					setAvatarUrl(res.data.avatar_url);
+				const data = res.data;
+				if (data.avatar_url) {
+					setAvatarUrl(data.avatar_url);
 				}
-				setFirstName(res.data.first_name || res.data.username || '');
-				setLastName(res.data.last_name || '');
+				setFirstName(data.first_name || data.username || '');
+				setLastName(data.last_name || '');
+
+				// Обновляем localStorage актуальными данными с сервера
+				const userStr = localStorage.getItem('user');
+				if (userStr) {
+					const user = JSON.parse(userStr);
+					user.first_name = data.first_name;
+					user.last_name = data.last_name;
+					user.avatar_url = data.avatar_url;
+					localStorage.setItem('user', JSON.stringify(user));
+					window.dispatchEvent(new Event('profile-updated'));
+				}
 			})
 			.catch(() => {/* молча игнорируем */});
 	}, []);
@@ -62,6 +74,16 @@ export default function ProfilePage() {
 			});
 
 			setAvatarUrl(res.data.avatar_url);
+			
+			// Обновляем localStorage
+			const userStr = localStorage.getItem('user');
+			if (userStr) {
+				const user = JSON.parse(userStr);
+				user.avatar_url = res.data.avatar_url;
+				localStorage.setItem('user', JSON.stringify(user));
+				window.dispatchEvent(new Event('profile-updated'));
+			}
+
 			toast.success('Фото профиля обновлено!', { id: loadingToast });
 		} catch (err: any) {
 			const msg = err.response?.data?.error || 'Ошибка при загрузке фото';
