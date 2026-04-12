@@ -181,19 +181,31 @@ class ItemViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         new_status = serializer.validated_data.get('status')
         item = serializer.save()
-        
-        # 🔥 ДОБАВЛЕНО: Логируем быстрые клики по статусам из таблицы
-        if new_status:
-            request = self.request
-            user = request.user if request and request.user.is_authenticated else None
-            OrderHistory.objects.create(
-                order=item.order,
-                user=user,
-                message=f"Изменил статус '{item.name}' на '{item.get_status_display()}'"
-            )
 
+        # 🔥 ИСПРАВЛЕНО: update_status() выполняется СИНХРОННО в основном потоке,
+        # чтобы SystemState обновился мгновенно и другие клиенты увидели изменение за 2 сек.
+        # Только запись в историю (не влияет на UI) уходит в фон.
         if hasattr(item.order, 'update_status'):
-            item.order.update_status()
+            try:
+                item.order.update_status()
+            except Exception as e:
+                print(f"Ошибка обновления статуса заказа: {e}")
+
+        def _log_history():
+            try:
+                if new_status:
+                    from .models import OrderHistory as _OH
+                    request = self.request
+                    user = request.user if request and request.user.is_authenticated else None
+                    _OH.objects.create(
+                        order=item.order,
+                        user=user,
+                        message=f"Изменил статус '{item.name}' на '{item.get_status_display()}'"
+                    )
+            except Exception as e:
+                print(f"Ошибка записи истории статуса: {e}")
+
+        threading.Thread(target=_log_history, daemon=True).start()
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -232,6 +244,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@never_cache
 def system_state_view(request):
     """
     Возвращает timestamp последнего изменения в базе данных.
