@@ -8,13 +8,32 @@ export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
 	// 🔥 Простой и надёжный polling: каждые 4 секунды рассылаем sync-updated всем страницам.
-	// Подход без system-state — не зависит от сравнения timestamp'ов.
+	// Используем Web Worker, чтобы браузер не замедлял polling до 1 минуты в фоновых вкладках.
 	// OrdersPage сама защищает оптимистичные обновления через pendingItemIds.
 	useEffect(() => {
-		const interval = setInterval(() => {
-			window.dispatchEvent(new Event('sync-updated'));
-		}, 4000);
-		return () => clearInterval(interval);
+		const worker = new Worker(new URL('../workers/pollingWorker.ts', import.meta.url), { type: 'module' });
+
+		worker.onmessage = (e) => {
+			if (e.data?.type === 'TICK') {
+				window.dispatchEvent(new Event('sync-updated'));
+			}
+		};
+
+		worker.postMessage({ type: 'START', interval: 4000 });
+
+		// Мгновенная синхронизация при возвращении пользователя на вкладку
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible') {
+				window.dispatchEvent(new Event('sync-updated'));
+			}
+		};
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
+		return () => {
+			worker.postMessage({ type: 'STOP' });
+			worker.terminate();
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+		};
 	}, []);
 
 	return (
