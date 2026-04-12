@@ -17,6 +17,20 @@ api.interceptors.request.use(
 			// Самый надежный способ установки заголовка в современных версиях Axios
 			config.headers.set('Authorization', `Bearer ${token}`);
 		}
+
+		// 🔥 Отключаем кэширование браузером для всех GET-запросов (решает проблему с возвратом старых статусов)
+		if (config.method?.toLowerCase() === 'get') {
+			config.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+			config.headers.set('Pragma', 'no-cache');
+			config.headers.set('Expires', '0');
+
+			// Добавляем cache-buster параметр в URL
+			config.params = {
+				...config.params,
+				_t: new Date().getTime()
+			};
+		}
+
 		return config;
 	},
 	(error) => Promise.reject(error)

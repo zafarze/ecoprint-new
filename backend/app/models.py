@@ -265,6 +265,6 @@ def update_system_state(sender, **kwargs):
     SystemState.mark_updated()
 
 # Привязываем обновление к сохранению и удалению важных моделей
-for model in [Order, Item, Product, User, Profile]:
+for model in [Order, Item, Product, User, Profile, OrderHistory]:
     post_save.connect(update_system_state, sender=model)
     post_delete.connect(update_system_state, sender=model)
