@@ -9,7 +9,7 @@ export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const lastUpdatedRef = useRef<number | null>(null);
 
-	// Глобальный пуллинг для "мгновенных" обновлений
+	// Глобальный пуллинг для «мгновенных» обновлений
 	useEffect(() => {
 		const pollState = async () => {
 			try {
@@ -17,8 +17,10 @@ export default function Layout() {
 				const newLastUpdated = res.data.last_updated;
 
 				if (lastUpdatedRef.current !== null && newLastUpdated > lastUpdatedRef.current) {
-					// Если данные изменились с прошлой проверки, рассылаем событие всем страницам
+					// Изменения обнаружены — мгновенно рассылаем событие всем страницам
 					window.dispatchEvent(new Event('sync-updated'));
+					// Через 600мс повторяем (фоновые потоки бэкенда могут не успеть за первым разом)
+					setTimeout(() => window.dispatchEvent(new Event('sync-updated')), 600);
 				}
 				lastUpdatedRef.current = newLastUpdated;
 			} catch (e) {
@@ -29,8 +31,8 @@ export default function Layout() {
 		// Первоначальный запрос, чтобы узнать стартовое время
 		pollState();
 
-		// Проверяем каждую 1 секунду (почти мгновенно для пользователя, но легко для сервера)
-		const interval = setInterval(pollState, 1000);
+		// Проверяем каждые 2 секунды (достаточно быстро, но меньше нагрузки на сервер)
+		const interval = setInterval(pollState, 2000);
 		return () => clearInterval(interval);
 	}, []);
 

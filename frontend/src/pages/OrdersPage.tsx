@@ -144,8 +144,8 @@ export default function OrdersPage() {
 		setIsLoading(false);
 
 		// Запускаем чистку архива В ФОНЕ (без await), она отработает незаметно
+		// Не нужно вызывать fetchOrdersSilently после — sync-updated сам сработает через polling
 		api.post('orders/trigger_auto_archive/')
-			.then(() => fetchOrdersSilently())
 			.catch(err => {
 				console.error("Ошибка авто-архивации на сервере:", err);
 			});
@@ -206,7 +206,7 @@ export default function OrdersPage() {
 			api.patch(`items/${item.id}/`, { status: newStatus }).then(() => {
 				pendingItemIds.current.delete(item.id);
 				notifyHeader();
-			}).catch((e) => {
+			}).catch((_e) => {
 				pendingItemIds.current.delete(item.id);
 				updateStateAndCache(previousOrders);
 				toast.error('Ошибка сохранения. Данные возвращены назад.');
