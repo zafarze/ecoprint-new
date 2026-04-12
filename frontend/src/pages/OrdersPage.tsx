@@ -57,6 +57,8 @@ export default function OrdersPage() {
 	const user = userStr ? JSON.parse(userStr) : null;
 	const userRole = user?.role || 'worker';
 	const canIssueOrders = userRole === 'manager' || userRole === 'superadmin' || userRole === 'admin';
+	// 🔑 Изолируем кэш по пользователю — чтобы данные не перетекали между аккаунтами
+	const CACHE_KEY = `cached_orders_${user?.id || 'guest'}`;
 
 	const [orders, setOrders] = useState<any[]>([]);
 	const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -77,6 +79,9 @@ export default function OrdersPage() {
 
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 	const [orderToDelete, setOrderToDelete] = useState<any>(null);
+
+	// 🔒 Набор ID товаров, статус которых сейчас отправляется на сервер (защита от перезаписи поллингом)
+	const pendingItemIds = useRef<Set<number>>(new Set());
 
 	const isModalOpenRef = useRef(false);
 
@@ -101,9 +106,24 @@ export default function OrdersPage() {
 		try {
 			const res = await api.get('orders/?is_archived=false');
 			const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
-			// Сохраняем свежие данные в кэш браузера и в стейт
-			localStorage.setItem('cached_orders', JSON.stringify(data));
-			setOrders(data);
+			// 🔒 Если есть pending-товары, не перезаписываем их оптимистичный статус данными с сервера
+			if (pendingItemIds.current.size > 0) {
+				setOrders(prev => {
+					const pendingMap = new Map<number, string>();
+					prev.forEach(o => o.items?.forEach((i: any) => {
+						if (pendingItemIds.current.has(i.id)) pendingMap.set(i.id, i.status);
+					}));
+					const merged = data.map((o: any) => ({
+						...o,
+						items: o.items?.map((i: any) => pendingMap.has(i.id) ? { ...i, status: pendingMap.get(i.id) } : i)
+					}));
+					localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
+					return merged;
+				});
+			} else {
+				localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+				setOrders(data);
+			}
 		} catch (err) {
 			console.error("Ошибка при загрузке заказов:", err);
 		}
@@ -111,7 +131,7 @@ export default function OrdersPage() {
 
 	const loadOrders = async () => {
 		// 🔥 МАГИЯ КЭША: Если в браузере уже есть сохраненные заказы, моментально показываем их
-		const cached = localStorage.getItem('cached_orders');
+		const cached = localStorage.getItem(CACHE_KEY);
 		if (cached) {
 			setOrders(JSON.parse(cached));
 			setIsLoading(false); // Выключаем лоадер МОМЕНТАЛЬНО (бабах!)
@@ -158,7 +178,7 @@ export default function OrdersPage() {
 
 		const updateStateAndCache = (newOrdersList: any[]) => {
 			setOrders(newOrdersList);
-			localStorage.setItem('cached_orders', JSON.stringify(newOrdersList));
+			localStorage.setItem(CACHE_KEY, JSON.stringify(newOrdersList));
 		};
 
 		const newOrders = orders.map(o => {
@@ -178,15 +198,21 @@ export default function OrdersPage() {
 
 		updateStateAndCache(newOrders);
 
+		// 🔒 Блокируем этот товар от перезаписи поллингом пока запрос летит на сервер
+		pendingItemIds.current.add(item.id);
+
 		try {
 			// Выполняем асинхронно без await, чтобы функция завершилась моментально
 			api.patch(`items/${item.id}/`, { status: newStatus }).then(() => {
+				pendingItemIds.current.delete(item.id);
 				notifyHeader();
 			}).catch((e) => {
+				pendingItemIds.current.delete(item.id);
 				updateStateAndCache(previousOrders);
 				toast.error('Ошибка сохранения. Данные возвращены назад.');
 			});
 		} catch (e) {
+			pendingItemIds.current.delete(item.id);
 			updateStateAndCache(previousOrders);
 			toast.error('Ошибка сохранения. Данные возвращены назад.');
 		}
@@ -198,7 +224,7 @@ export default function OrdersPage() {
 
 		const updateStateAndCache = (newOrdersList: any[]) => {
 			setOrders(newOrdersList);
-			localStorage.setItem('cached_orders', JSON.stringify(newOrdersList));
+			localStorage.setItem(CACHE_KEY, JSON.stringify(newOrdersList));
 		};
 
 		const newOrders = orders.map(o => o.id === order.id ? { ...o, is_received: newVal } : o);
@@ -225,7 +251,7 @@ export default function OrdersPage() {
 
 		const updateStateAndCache = (newOrdersList: any[]) => {
 			setOrders(newOrdersList);
-			localStorage.setItem('cached_orders', JSON.stringify(newOrdersList));
+			localStorage.setItem(CACHE_KEY, JSON.stringify(newOrdersList));
 		};
 
 		// 2. ОПТИМИСТИКА: Сразу рисуем заказ в таблице, чтобы пользователь видел результат моментально
@@ -264,7 +290,7 @@ export default function OrdersPage() {
 				// В orders может быть fakeId, нам нужно его заменить
 				setOrders(prev => {
 					const updated = prev.map(o => o.id === fakeId ? savedOrder : o);
-					localStorage.setItem('cached_orders', JSON.stringify(updated));
+					localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
 					return updated;
 				});
 			}
@@ -276,7 +302,7 @@ export default function OrdersPage() {
 			if (isCreating) {
 				setOrders(prev => {
 					const updated = prev.filter(o => o.id !== fakeId);
-					localStorage.setItem('cached_orders', JSON.stringify(updated));
+					localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
 					return updated;
 				});
 			}
@@ -289,7 +315,7 @@ export default function OrdersPage() {
 		const previousOrders = [...orders];
 		const updated = orders.filter(o => o.id !== orderId);
 		setOrders(updated);
-		localStorage.setItem('cached_orders', JSON.stringify(updated));
+		localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
 		toast.success('Заказ отправлен в архив');
 
 		try {
@@ -299,7 +325,7 @@ export default function OrdersPage() {
 		} catch (e) {
 			// Если произошла ошибка сети, возвращаем карточку обратно
 			setOrders(previousOrders);
-			localStorage.setItem('cached_orders', JSON.stringify(previousOrders));
+			localStorage.setItem(CACHE_KEY, JSON.stringify(previousOrders));
 			toast.error('Ошибка сети. Заказ возвращен.');
 		}
 	};
@@ -313,7 +339,7 @@ export default function OrdersPage() {
 
 		const updated = orders.filter(o => o.id !== targetId);
 		setOrders(updated);
-		localStorage.setItem('cached_orders', JSON.stringify(updated));
+		localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
 		setIsDeleteModalOpen(false);
 		toast.success('Удалено');
 
@@ -323,7 +349,7 @@ export default function OrdersPage() {
 			notifyHeader();
 		} catch (e) {
 			setOrders(previousOrders);
-			localStorage.setItem('cached_orders', JSON.stringify(previousOrders));
+			localStorage.setItem(CACHE_KEY, JSON.stringify(previousOrders));
 			toast.error('Ошибка при удалении');
 		}
 	};
