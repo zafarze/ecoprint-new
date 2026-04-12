@@ -78,8 +78,6 @@ export default function OrdersPage() {
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 	const [orderToDelete, setOrderToDelete] = useState<any>(null);
 
-	const [updatingItems, setUpdatingItems] = useState<Set<number>>(new Set());
-
 	const isModalOpenRef = useRef(false);
 
 	useEffect(() => {
@@ -149,14 +147,12 @@ export default function OrdersPage() {
 	}, []);
 
 	const handleToggleItemStatus = async (item: any, orderId: number) => {
-		if (updatingItems.has(item.id)) return;
-		setUpdatingItems(prev => new Set(prev).add(item.id));
+		// ОПТИМИСТИЧНЫЙ UI: Не блокируем UI загрузками (нет spinner'a)
 
 		const previousOrders = [...orders];
 		const nextStatusMap: Record<string, string> = { 'not-ready': 'in-progress', 'in-progress': 'ready', 'ready': 'not-ready' };
 		const newStatus = nextStatusMap[item.status];
 		if (!newStatus) {
-			setUpdatingItems(prev => { const next = new Set(prev); next.delete(item.id); return next; });
 			return;
 		}
 
@@ -183,13 +179,16 @@ export default function OrdersPage() {
 		updateStateAndCache(newOrders);
 
 		try {
-			await api.patch(`items/${item.id}/`, { status: newStatus });
-			notifyHeader();
+			// Выполняем асинхронно без await, чтобы функция завершилась моментально
+			api.patch(`items/${item.id}/`, { status: newStatus }).then(() => {
+				notifyHeader();
+			}).catch((e) => {
+				updateStateAndCache(previousOrders);
+				toast.error('Ошибка сохранения. Данные возвращены назад.');
+			});
 		} catch (e) {
 			updateStateAndCache(previousOrders);
 			toast.error('Ошибка сохранения. Данные возвращены назад.');
-		} finally {
-			setUpdatingItems(prev => { const next = new Set(prev); next.delete(item.id); return next; });
 		}
 	};
 
@@ -601,11 +600,9 @@ export default function OrdersPage() {
 												)}
 												{/* Большая кнопка статуса — удобна для пальца */}
 												<button
-													disabled={updatingItems.has(item.id)}
 													onClick={() => handleToggleItemStatus(item, order.id)}
-													className={`w-full py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-transform ${updatingItems.has(item.id) ? 'opacity-60 cursor-not-allowed flex items-center justify-center gap-2' : 'active:scale-95'} ${mBadgeStyle}`}
+													className={`w-full py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-transform active:scale-95 ${mBadgeStyle}`}
 												>
-													{updatingItems.has(item.id) ? <Loader2 size={14} className="animate-spin" /> : null}
 													{mBadgeLabel}
 												</button>
 											</div>
@@ -744,8 +741,7 @@ export default function OrdersPage() {
 																		</div>
 																	</div>
 
-																	<button disabled={updatingItems.has(item.id)} onClick={() => handleToggleItemStatus(item, order.id)} className={`w-[100px] py-1.5 rounded-lg text-[10px] flex items-center justify-center gap-1.5 text-center font-black uppercase tracking-wider shrink-0 transition-colors ${updatingItems.has(item.id) ? 'opacity-60 cursor-not-allowed' : 'active:scale-95 cursor-pointer'} ${currentBadgeStyle}`} title="Изменить статус">
-																		{updatingItems.has(item.id) ? <Loader2 size={12} className="animate-spin" /> : null}
+																	<button onClick={() => handleToggleItemStatus(item, order.id)} className={`w-[100px] py-1.5 rounded-lg text-[10px] flex items-center justify-center gap-1.5 text-center font-black uppercase tracking-wider shrink-0 transition-colors active:scale-95 cursor-pointer ${currentBadgeStyle}`} title="Изменить статус">
 																		{currentBadgeLabel}
 																	</button>
 																</div>
