@@ -152,7 +152,12 @@ export default function OrdersPage() {
 		const newStatus = nextStatusMap[item.status];
 		if (!newStatus) return;
 
-		setOrders(prev => prev.map(o => {
+		const updateStateAndCache = (newOrdersList: any[]) => {
+			setOrders(newOrdersList);
+			localStorage.setItem('cached_orders', JSON.stringify(newOrdersList));
+		};
+
+		const newOrders = orders.map(o => {
 			if (o.id === orderId) {
 				const updatedItems = o.items.map((i: any) => i.id === item.id ? { ...i, status: newStatus } : i);
 				const allReady = updatedItems.every((i: any) => i.status === 'ready');
@@ -165,13 +170,15 @@ export default function OrdersPage() {
 				return { ...o, items: updatedItems, status: newOrderStatus };
 			}
 			return o;
-		}));
+		});
+
+		updateStateAndCache(newOrders);
 
 		try {
 			await api.patch(`items/${item.id}/`, { status: newStatus });
 			notifyHeader();
 		} catch (e) {
-			setOrders(previousOrders);
+			updateStateAndCache(previousOrders);
 			toast.error('Ошибка сохранения. Данные возвращены назад.');
 		}
 	};
@@ -180,14 +187,20 @@ export default function OrdersPage() {
 		const previousOrders = [...orders];
 		const newVal = !order.is_received;
 
-		setOrders(prev => prev.map(o => o.id === order.id ? { ...o, is_received: newVal } : o));
+		const updateStateAndCache = (newOrdersList: any[]) => {
+			setOrders(newOrdersList);
+			localStorage.setItem('cached_orders', JSON.stringify(newOrdersList));
+		};
+
+		const newOrders = orders.map(o => o.id === order.id ? { ...o, is_received: newVal } : o);
+		updateStateAndCache(newOrders);
 
 		try {
 			await api.patch(`orders/${order.id}/`, { is_received: newVal });
 			toast.success(newVal ? 'Заказ выдан!' : 'Отметка о выдаче снята');
 			notifyHeader();
 		} catch (e) {
-			setOrders(previousOrders);
+			updateStateAndCache(previousOrders);
 			toast.error('Ошибка сети. Действие отменено.');
 		}
 	};
@@ -200,6 +213,11 @@ export default function OrdersPage() {
 
 		const fakeId = Date.now();
 		const isCreating = !editingOrder;
+
+		const updateStateAndCache = (newOrdersList: any[]) => {
+			setOrders(newOrdersList);
+			localStorage.setItem('cached_orders', JSON.stringify(newOrdersList));
+		};
 
 		// 2. ОПТИМИСТИКА: Сразу рисуем заказ в таблице, чтобы пользователь видел результат моментально
 		if (isCreating) {
@@ -220,7 +238,7 @@ export default function OrdersPage() {
 					responsible_user: { first_name: 'Сохранение...' }
 				}))
 			};
-			setOrders(prev => [fakeOrder, ...prev]);
+			updateStateAndCache([fakeOrder, ...orders]);
 		}
 
 		try {
@@ -229,12 +247,17 @@ export default function OrdersPage() {
 				const res = await api.put(`orders/${editingOrder.id}/`, orderData);
 				savedOrder = res.data;
 				// Обновляем реальными данными
-				setOrders(prev => prev.map(o => o.id === savedOrder.id ? savedOrder : o));
+				updateStateAndCache(orders.map(o => o.id === savedOrder.id ? savedOrder : o));
 			} else {
 				const res = await api.post('orders/', orderData);
 				savedOrder = res.data;
 				// Меняем наш фейковый ID на настоящий из Базы Данных
-				setOrders(prev => prev.map(o => o.id === fakeId ? savedOrder : o));
+				// В orders может быть fakeId, нам нужно его заменить
+				setOrders(prev => {
+					const updated = prev.map(o => o.id === fakeId ? savedOrder : o);
+					localStorage.setItem('cached_orders', JSON.stringify(updated));
+					return updated;
+				});
 			}
 
 			toast.success('Успешно!', { id: saveToast });
@@ -242,7 +265,11 @@ export default function OrdersPage() {
 		} catch (e) {
 			toast.error('Ошибка сети. Действие отменено.', { id: saveToast });
 			if (isCreating) {
-				setOrders(prev => prev.filter(o => o.id !== fakeId)); // Убираем фейк при ошибке
+				setOrders(prev => {
+					const updated = prev.filter(o => o.id !== fakeId);
+					localStorage.setItem('cached_orders', JSON.stringify(updated));
+					return updated;
+				});
 			}
 			fetchOrdersSilently(); // Синхронизируем базу
 		}
@@ -251,7 +278,9 @@ export default function OrdersPage() {
 	const handleArchiveOrder = async (orderId: number) => {
 		// ОПТИМИСТИЧНЫЙ UI: Сначала моментально прячем заказ с экрана
 		const previousOrders = [...orders];
-		setOrders(prev => prev.filter(o => o.id !== orderId));
+		const updated = orders.filter(o => o.id !== orderId);
+		setOrders(updated);
+		localStorage.setItem('cached_orders', JSON.stringify(updated));
 		toast.success('Заказ отправлен в архив');
 
 		try {
@@ -261,6 +290,7 @@ export default function OrdersPage() {
 		} catch (e) {
 			// Если произошла ошибка сети, возвращаем карточку обратно
 			setOrders(previousOrders);
+			localStorage.setItem('cached_orders', JSON.stringify(previousOrders));
 			toast.error('Ошибка сети. Заказ возвращен.');
 		}
 	};
@@ -272,7 +302,9 @@ export default function OrdersPage() {
 		const previousOrders = [...orders];
 		const targetId = orderToDelete.id;
 
-		setOrders(prev => prev.filter(o => o.id !== targetId));
+		const updated = orders.filter(o => o.id !== targetId);
+		setOrders(updated);
+		localStorage.setItem('cached_orders', JSON.stringify(updated));
 		setIsDeleteModalOpen(false);
 		toast.success('Удалено');
 
@@ -282,6 +314,7 @@ export default function OrdersPage() {
 			notifyHeader();
 		} catch (e) {
 			setOrders(previousOrders);
+			localStorage.setItem('cached_orders', JSON.stringify(previousOrders));
 			toast.error('Ошибка при удалении');
 		}
 	};
