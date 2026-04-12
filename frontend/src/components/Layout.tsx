@@ -1,38 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AIChatWidget from './AIChatWidget';
-import api from '../api/api';
 
 export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-	const lastUpdatedRef = useRef<number | null>(null);
 
-	// Глобальный пуллинг для «мгновенных» обновлений
+	// 🔥 Простой и надёжный polling: каждые 4 секунды рассылаем sync-updated всем страницам.
+	// Подход без system-state — не зависит от сравнения timestamp'ов.
+	// OrdersPage сама защищает оптимистичные обновления через pendingItemIds.
 	useEffect(() => {
-		const pollState = async () => {
-			try {
-				const res = await api.get('system-state/');
-				const newLastUpdated = res.data.last_updated;
-
-				if (lastUpdatedRef.current !== null && newLastUpdated > lastUpdatedRef.current) {
-					// Изменения обнаружены — мгновенно рассылаем событие всем страницам
-					window.dispatchEvent(new Event('sync-updated'));
-					// Через 600мс повторяем (фоновые потоки бэкенда могут не успеть за первым разом)
-					setTimeout(() => window.dispatchEvent(new Event('sync-updated')), 600);
-				}
-				lastUpdatedRef.current = newLastUpdated;
-			} catch (e) {
-				// Игнорируем ошибки сети при пуллинге
-			}
-		};
-
-		// Первоначальный запрос, чтобы узнать стартовое время
-		pollState();
-
-		// Проверяем каждые 2 секунды (достаточно быстро, но меньше нагрузки на сервер)
-		const interval = setInterval(pollState, 2000);
+		const interval = setInterval(() => {
+			window.dispatchEvent(new Event('sync-updated'));
+		}, 4000);
 		return () => clearInterval(interval);
 	}, []);
 
