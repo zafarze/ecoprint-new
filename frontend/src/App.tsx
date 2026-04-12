@@ -26,9 +26,8 @@ import api from './api/api';
 const GlobalObserver = () => {
   useEffect(() => {
     let lastOrderIdStr = localStorage.getItem('last_known_order_id');
-    
-    // Каждые 15 секунд тихо спрашиваем сервер, есть ли новые заказы
-    const interval = setInterval(async () => {
+
+    const checkNewOrders = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token || token === 'undefined') return;
@@ -43,31 +42,40 @@ const GlobalObserver = () => {
         const { has_new, latest_id, new_orders } = res.data;
 
         if (latest_id) {
-            localStorage.setItem('last_known_order_id', latest_id.toString());
-            lastOrderIdStr = latest_id.toString();
+          localStorage.setItem('last_known_order_id', latest_id.toString());
+          lastOrderIdStr = latest_id.toString();
         }
 
         if (has_new && new_orders && new_orders.length > 0) {
-           // Звук
-           if (settings.sound) {
-               const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-               audio.volume = 0.5;
-               audio.play().catch(e => console.error("Звук заблокирован политикой автоплея:", e));
-           }
+          // Звук
+          if (settings.sound) {
+            const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+            audio.volume = 0.5;
+            audio.play().catch(e => console.error("Звук заблокирован политикой автоплея:", e));
+          }
 
-           // Всплывающие окна
-           if (settings.popup) {
-               new_orders.forEach((o: any) => {
-                   toast.success(`Новый заказ: ${o.client} (№${o.id})!`, { icon: '🔥', duration: 10000 });
-               });
-           }
+          // Всплывающие окна
+          if (settings.popup) {
+            new_orders.forEach((o: any) => {
+              toast.success(`Новый заказ: ${o.client} (№${o.id})!`, { icon: '🔥', duration: 10000 });
+            });
+          }
         }
       } catch (err) {
-         // Молча игнорируем сетевые ошибки, чтобы не спамить в консоль
+        // Молча игнорируем сетевые ошибки, чтобы не спамить в консоль
       }
-    }, 15000); 
+    };
 
-    return () => clearInterval(interval);
+    // Каждые 15 секунд тихо спрашиваем сервер, есть ли новые заказы
+    const interval = setInterval(checkNewOrders, 15000);
+
+    // И мгновенно реагируем на глобальное событие обновления
+    window.addEventListener('sync-updated', checkNewOrders);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('sync-updated', checkNewOrders);
+    };
   }, []);
 
   return null;
@@ -84,7 +92,7 @@ const RequireAuth = () => {
       <GlobalObserver />
       <Outlet />
     </>
-  ); 
+  );
 };
 
 // === РОЛЕВОЙ ЗАЩИТНИК (RBAC Route) ===
@@ -93,13 +101,13 @@ const RequireRole = ({ allowedRoles }: { allowedRoles: string[] }) => {
   const user = userStr && userStr !== 'undefined' ? JSON.parse(userStr) : null;
   // По умолчанию предполагаем самую низкую роль (worker)
   const role = user?.role || 'worker';
-  
+
   if (!allowedRoles.includes(role)) {
     // Всплывающее уведомление, что доступ запрещен
     console.warn("Доступ запрещен. Роль:", role);
     return <Navigate to="/" replace />;
   }
-  
+
   return <Outlet />;
 };
 
@@ -151,10 +159,10 @@ function App() {
               {/* Строго для Супер Администраторов */}
               <Route element={<RequireRole allowedRoles={['superadmin']} />}>
                 <Route path="statistics" element={<StatisticsPage />} />
-                
+
                 {/* === ПРАВИЛЬНЫЙ РОУТИНГ НАСТРОЕК === */}
                 <Route path="settings" element={<SettingsLayout />}>
-                  <Route index element={<SettingsPage />} /> 
+                  <Route index element={<SettingsPage />} />
                   <Route path="company" element={<CompanySettings />} />
                   <Route path="integrations" element={<IntegrationsSettings />} />
                   <Route path="notifications" element={<NotificationSettings />} />

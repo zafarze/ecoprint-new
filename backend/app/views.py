@@ -2,7 +2,7 @@ import os
 import threading
 # import gspread
 from datetime import date, timedelta
-from .models import Order, Item, Product, CompanySettings, TelegramSettings, OrderHistory
+from .models import Order, Item, Product, CompanySettings, TelegramSettings, OrderHistory, SystemState
 from django.db import transaction  # 🔥 ДОБАВЛЕНО: для защиты базы данных (транзакции)
 from django.utils import timezone
 from django.conf import settings
@@ -80,7 +80,10 @@ class OrderViewSet(viewsets.ModelViewSet):
         return context
 
     def perform_create(self, serializer):
-        order = serializer.save()
+        is_received = serializer.validated_data.get('is_received', False)
+        received_at = timezone.now() if is_received else None
+        
+        order = serializer.save(received_at=received_at)
         # 🔥 ИСПРАВЛЕНО: Отправка в Telegram работает в фоне, ускоряя ответ сервера клиенту
         try:
             threading.Thread(target=send_telegram_notification, args=(order,)).start()
@@ -89,14 +92,18 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def trigger_auto_archive(self, request):
+        from django.db.models import Q
+        
         # 1. Считаем дату: ровно 3 дня назад от текущего момента
         three_days_ago = timezone.now() - timedelta(days=3)
         
-        # 2. Ищем заказы: не в архиве, ВЫДАНЫ клиенту и дата выдачи старше 3 дней
+        # 2. Ищем заказы: не в архиве, ВЫДАНЫ клиенту и дата выдачи старше 3 дней 
+        # (у старых заказов received_at может быть NULL, тогда смотрим по updated_at)
         orders_to_archive = Order.objects.filter(
+            Q(received_at__lte=three_days_ago) | 
+            Q(received_at__isnull=True, updated_at__lte=three_days_ago),
             is_archived=False, 
-            is_received=True, 
-            received_at__lte=three_days_ago
+            is_received=True
         )
         
         # Собираем ID этих заказов, чтобы заархивировать и сами заказы, и их товары
@@ -222,6 +229,16 @@ class UserViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.save()
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def system_state_view(request):
+    """
+    Возвращает timestamp последнего изменения в базе данных.
+    Используется фронтендом для мгновенного обновления данных без WebSockets.
+    """
+    last_updated = SystemState.get_last_updated()
+    return Response({'last_updated': last_updated})
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО: Защита эндпоинта ИИ

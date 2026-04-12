@@ -1,11 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import AIChatWidget from './AIChatWidget'; // <-- 1. ИМПОРТИРУЕМ НАШ ЧАТ
+import AIChatWidget from './AIChatWidget';
+import api from '../api/api';
 
 export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+	const lastUpdatedRef = useRef<number | null>(null);
+
+	// Глобальный пуллинг для "мгновенных" обновлений
+	useEffect(() => {
+		const pollState = async () => {
+			try {
+				const res = await api.get('system-state/');
+				const newLastUpdated = res.data.last_updated;
+
+				if (lastUpdatedRef.current !== null && newLastUpdated > lastUpdatedRef.current) {
+					// Если данные изменились с прошлой проверки, рассылаем событие всем страницам
+					window.dispatchEvent(new Event('sync-updated'));
+				}
+				lastUpdatedRef.current = newLastUpdated;
+			} catch (e) {
+				// Игнорируем ошибки сети при пуллинге
+			}
+		};
+
+		// Первоначальный запрос, чтобы узнать стартовое время
+		pollState();
+
+		// Проверяем каждую 1 секунду (почти мгновенно для пользователя, но легко для сервера)
+		const interval = setInterval(pollState, 1000);
+		return () => clearInterval(interval);
+	}, []);
 
 	return (
 		<div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">

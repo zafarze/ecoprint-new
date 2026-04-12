@@ -41,11 +41,13 @@ export default function ArchivePage() {
 	useEffect(() => {
 		fetchArchive();
 
-		const intervalId = setInterval(() => {
+		// Мгновенное обновление по событию от глобального пуллера (Layout.tsx)
+		const handleSync = () => {
 			fetchArchiveSilently();
-		}, 3000);
+		};
+		window.addEventListener('sync-updated', handleSync);
 
-		return () => clearInterval(intervalId);
+		return () => window.removeEventListener('sync-updated', handleSync);
 	}, []);
 
 	const handleRestore = async (id: number) => {

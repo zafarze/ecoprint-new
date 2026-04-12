@@ -29,6 +29,9 @@ urlpatterns = [
     # path('webhook-sync-sheets/', views.sync_sheets_webhook, name='app-webhook-sync-sheets'),
     path('webhook-daily-reminders/', views.webhook_daily_reminders, name='app-webhook-daily-reminders'),
     path('ai-chat/', views.chat_with_ai, name='app-ai-chat'),
+
+    # Глобальное состояние системы для мгновенных обновлений
+    path('system-state/', views.system_state_view, name='app-system-state'),
     
     # Пути настроек теперь находятся там, где нужно:
     path('settings/company/', views.CompanySettingsAPIView.as_view(), name='app-settings-company'),

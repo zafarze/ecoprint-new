@@ -1,8 +1,22 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
+
+# === Модель Системного Состояния (Для мгновенных обновлений) ===
+class SystemState(models.Model):
+    last_updated = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get_last_updated(cls):
+        state, _ = cls.objects.get_or_create(id=1)
+        return state.last_updated.timestamp()
+
+    @classmethod
+    def mark_updated(cls):
+        state, _ = cls.objects.get_or_create(id=1)
+        state.save()
 
 # === Модель Заказа ===
 class Order(models.Model):
@@ -245,3 +259,12 @@ class OrderHistory(models.Model):
     def __str__(self):
         user_str = self.user.username if self.user else "Система"
         return f"{self.created_at.strftime('%d.%m %H:%M')} - {user_str}: {self.message}"
+
+# === Сигналы для обновления SystemState ===
+def update_system_state(sender, **kwargs):
+    SystemState.mark_updated()
+
+# Привязываем обновление к сохранению и удалению важных моделей
+for model in [Order, Item, Product, User, Profile]:
+    post_save.connect(update_system_state, sender=model)
+    post_delete.connect(update_system_state, sender=model)

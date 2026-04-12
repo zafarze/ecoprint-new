@@ -65,13 +65,14 @@ export default function ProductsPage() {
 	useEffect(() => {
 		fetchProducts();
 
-		const intervalId = setInterval(() => {
+		const handleSync = () => {
 			if (!isModalOpen && !isDeleteModalOpen) {
 				fetchProductsSilently();
 			}
-		}, 3000);
+		};
+		window.addEventListener('sync-updated', handleSync);
 
-		return () => clearInterval(intervalId);
+		return () => window.removeEventListener('sync-updated', handleSync);
 	}, [isModalOpen, isDeleteModalOpen]);
 
 	const openModal = (product = null) => {

@@ -135,14 +135,15 @@ export default function OrdersPage() {
 		loadOrders();
 		fetchProducts();
 
-		// Автоматическое обновление данных (каждые 3 секунды)
-		const intervalId = setInterval(() => {
+		// Мгновенное обновление по событию от глобального пуллера (Layout.tsx)
+		const handleSync = () => {
 			if (!isModalOpenRef.current) {
 				fetchOrdersSilently();
 			}
-		}, 3000);
+		};
+		window.addEventListener('sync-updated', handleSync);
 
-		return () => clearInterval(intervalId);
+		return () => window.removeEventListener('sync-updated', handleSync);
 	}, []);
 
 	const handleToggleItemStatus = async (item: any, orderId: number) => {

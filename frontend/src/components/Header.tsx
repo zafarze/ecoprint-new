@@ -50,10 +50,12 @@ export default function Header({ onMenuClick }: HeaderProps) {
 		const interval = setInterval(fetchDeadlineStats, 60000);
 
 		window.addEventListener('orders-updated', fetchDeadlineStats);
+		window.addEventListener('sync-updated', fetchDeadlineStats);
 
 		return () => {
 			clearInterval(interval);
 			window.removeEventListener('orders-updated', fetchDeadlineStats);
+			window.removeEventListener('sync-updated', fetchDeadlineStats);
 		};
 	}, []);
 
