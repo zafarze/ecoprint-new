@@ -79,7 +79,10 @@ export default function OrdersPage() {
 	const [orderToDelete, setOrderToDelete] = useState<any>(null);
 
 	const isModalOpenRef = useRef(false);
-	isModalOpenRef.current = isModalOpen || isDeleteModalOpen;
+
+	useEffect(() => {
+		isModalOpenRef.current = isModalOpen || isDeleteModalOpen;
+	}, [isModalOpen, isDeleteModalOpen]);
 
 	useEffect(() => { setCurrentPage(1); }, [searchQuery, activeStatus, activeProduct, deadlineFilter]);
 
@@ -131,6 +134,15 @@ export default function OrdersPage() {
 	useEffect(() => {
 		loadOrders();
 		fetchProducts();
+
+		// Автоматическое обновление данных (каждые 3 секунды)
+		const intervalId = setInterval(() => {
+			if (!isModalOpenRef.current) {
+				fetchOrdersSilently();
+			}
+		}, 3000);
+
+		return () => clearInterval(intervalId);
 	}, []);
 
 	const handleToggleItemStatus = async (item: any, orderId: number) => {
@@ -319,20 +331,37 @@ export default function OrdersPage() {
 			return matchesSearch && matchesStatus && matchesProduct && matchesDeadline;
 		});
 
-		const sortTodayStr = getLocalDateStr(0);
-		const isOverdue = (order: any) =>
-			order.status !== 'ready' &&
-			Array.isArray(order.items) &&
-			order.items.some((i: any) => i.status !== 'ready' && i.deadline && i.deadline < sortTodayStr);
+		const getMinDeadline = (order: any) => {
+			if (!Array.isArray(order.items) || order.items.length === 0) return '9999-12-31';
+
+			// Сначала ищем дедлайны среди НЕ готовых товаров
+			const activeDeadlines = order.items
+				.filter((i: any) => i.status !== 'ready' && i.deadline)
+				.map((i: any) => i.deadline);
+
+			if (activeDeadlines.length > 0) {
+				return activeDeadlines.sort()[0];
+			}
+
+			// Если активных нет, берем дедлайны готовых
+			const allDeadlines = order.items.map((i: any) => i.deadline).filter(Boolean);
+			if (allDeadlines.length > 0) {
+				return allDeadlines.sort()[0];
+			}
+
+			return '9999-12-31';
+		};
 
 		result.sort((a, b) => {
-			// Оставляем просроченные заказы наверху, чтобы о них не забыли
-			const overdueA = isOverdue(a) ? 0 : 1;
-			const overdueB = isOverdue(b) ? 0 : 1;
-			if (overdueA !== overdueB) return overdueA - overdueB;
+			const deadlineA = getMinDeadline(a);
+			const deadlineB = getMinDeadline(b);
 
-			// Дальше просто сортируем по дате создания (чем новее, тем выше), 
-			// БЕЗ прыжков по статусу, как и просил клиент.
+			// Сортировка по дедлайну (самые близкие / просроченные первыми)
+			if (deadlineA !== deadlineB) {
+				return deadlineA.localeCompare(deadlineB);
+			}
+
+			// При равном дедлайне, сортируем по id (новые выше)
 			return b.id - a.id;
 		});
 
@@ -419,26 +448,24 @@ export default function OrdersPage() {
 						return (
 							<div
 								key={order.id}
-								className={`rounded-2xl border-2 shadow-sm overflow-hidden ${
-									order.status === 'ready'
-										? 'border-emerald-200 bg-emerald-50/40'
-										: isOrderOverdue
-											? 'border-rose-400 bg-rose-50/40 ring-2 ring-rose-300/40'
-											: order.status === 'in-progress'
-												? 'border-orange-200 bg-orange-50/20'
-												: 'border-slate-200 bg-white'
-								}`}
+								className={`rounded-2xl border-2 shadow-sm overflow-hidden ${order.status === 'ready'
+									? 'border-emerald-200 bg-emerald-50/40'
+									: isOrderOverdue
+										? 'border-rose-400 bg-rose-50/40 ring-2 ring-rose-300/40'
+										: order.status === 'in-progress'
+											? 'border-orange-200 bg-orange-50/20'
+											: 'border-slate-200 bg-white'
+									}`}
 							>
 								{/* ── Шапка карточки ── */}
 								<div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
 									<div className="flex items-center gap-3 min-w-0">
 										{/* Номер-аватар */}
-										<div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-sm ${
-											order.status === 'ready' ? 'bg-emerald-500 text-white' :
+										<div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-sm ${order.status === 'ready' ? 'bg-emerald-500 text-white' :
 											isOrderOverdue ? 'bg-rose-500 text-white animate-pulse' :
-											order.status === 'in-progress' ? 'bg-orange-500 text-white' :
-											'bg-slate-200 text-slate-700'
-										}`}>
+												order.status === 'in-progress' ? 'bg-orange-500 text-white' :
+													'bg-slate-200 text-slate-700'
+											}`}>
 											#{orderNum}
 										</div>
 										<div className="min-w-0">
@@ -502,7 +529,7 @@ export default function OrdersPage() {
 												{/* Название + количество */}
 												<div className="flex items-center gap-2 mb-2">
 													<div className="w-5 h-5 rounded-full bg-white border border-slate-200 text-primary flex items-center justify-center text-[10px] font-black shrink-0 shadow-inner">{idx + 1}</div>
-													<div className="font-black text-sm leading-tight flex-1">{item.name} <span className="font-medium text-slate-500 text-xs">×{item.quantity}</span></div>
+													<div className="font-black text-sm leading-tight flex-1">{item.name} <span className="font-medium text-slate-500 text-xs">×{item.quantity} шт</span></div>
 												</div>
 												{/* Даты + ответственный */}
 												<div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold mb-2.5 pl-7">
@@ -545,11 +572,10 @@ export default function OrdersPage() {
 									<div className="px-4 pb-4">
 										<button
 											onClick={() => handleToggleReceived(order)}
-											className={`w-full py-3 rounded-xl text-sm font-black active:scale-95 transition-transform ${
-												order.is_received
-													? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-200'
-													: 'bg-rose-100 text-rose-700 border-2 border-rose-200'
-											}`}
+											className={`w-full py-3 rounded-xl text-sm font-black active:scale-95 transition-transform ${order.is_received
+												? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-200'
+												: 'bg-rose-100 text-rose-700 border-2 border-rose-200'
+												}`}
 										>
 											{order.is_received ? '✓ Клиент получил' : '📦 Выдать клиенту'}
 										</button>
@@ -659,7 +685,7 @@ export default function OrdersPage() {
 																<div className="flex items-center justify-between gap-4">
 																	<div className="flex items-center gap-3.5">
 																		<div className="w-6 h-6 rounded-full bg-white border border-slate-200 text-primary flex items-center justify-center text-xs font-black shrink-0 shadow-inner">{idx + 1}</div>
-																		<div className="font-black text-sm tracking-tight">{item.name} <span className="text-slate-500 font-medium ml-1">x{item.quantity}</span></div>
+																		<div className="font-black text-sm tracking-tight">{item.name} <span className="text-slate-500 font-medium ml-1">×{item.quantity} шт</span></div>
 
 																		<div className="flex flex-col text-xs sm:text-[13px] font-black ml-1 sm:ml-4 border-l-2 border-slate-200/50 pl-4 space-y-1">
 																			<div className="flex items-center gap-2 text-slate-500"><PlayCircle size={14} className="text-slate-400" /> {formatDateToRu(order.created_at)}</div>
@@ -702,15 +728,14 @@ export default function OrdersPage() {
 													)}
 
 													{canIssueOrders && (
-														<button 
-															onClick={() => order.status === 'ready' && handleToggleReceived(order)} 
-															className={`whitespace-nowrap w-[130px] px-2 py-1.5 rounded-full text-[11px] font-bold transition-all shadow-sm ${
-																order.status === 'ready' 
-																? (order.is_received 
-																	? 'bg-emerald-100/50 text-emerald-800 hover:bg-emerald-200 border border-emerald-200/50' 
+														<button
+															onClick={() => order.status === 'ready' && handleToggleReceived(order)}
+															className={`whitespace-nowrap w-[130px] px-2 py-1.5 rounded-full text-[11px] font-bold transition-all shadow-sm ${order.status === 'ready'
+																? (order.is_received
+																	? 'bg-emerald-100/50 text-emerald-800 hover:bg-emerald-200 border border-emerald-200/50'
 																	: 'bg-rose-200/50 text-rose-700 hover:bg-rose-200 border border-rose-300/30')
 																: 'opacity-0 pointer-events-none cursor-default select-none'
-															}`}
+																}`}
 															tabIndex={order.status === 'ready' ? 0 : -1}
 															aria-hidden={order.status !== 'ready'}
 														>

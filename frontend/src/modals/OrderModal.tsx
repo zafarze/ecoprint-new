@@ -150,9 +150,9 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 								<div className="space-y-4">
 									<div>
 										<Label>Тип продукции *</Label>
-										<div className="flex gap-2">
+										<div className="flex flex-col sm:flex-row gap-2">
 											<Input className="flex-1" value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} placeholder="Бумажные пакеты / Визитки..." required />
-											<Button type="button" variant={activeProductDropdown === item.id ? "primary" : "outline"} onClick={() => setActiveProductDropdown(activeProductDropdown === item.id ? null : item.id)} className="shrink-0" icon={<LayoutList size={16} />}>Выбрать из списка</Button>
+											<Button type="button" variant={activeProductDropdown === item.id ? "primary" : "outline"} onClick={() => setActiveProductDropdown(activeProductDropdown === item.id ? null : item.id)} className="shrink-0 w-full sm:w-auto flex justify-center" icon={<LayoutList size={16} />}>Выбрать из списка</Button>
 										</div>
 										{activeProductDropdown === item.id && (
 											<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">

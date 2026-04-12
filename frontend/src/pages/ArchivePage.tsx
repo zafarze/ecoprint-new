@@ -12,6 +12,18 @@ export default function ArchivePage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
 
+	const fetchArchiveSilently = async () => {
+		try {
+			const res = await api.get('orders/?is_archived=true');
+			const data = res.data;
+			const ordersArray = Array.isArray(data) ? data : (data.results || []);
+			localStorage.setItem('cached_archive', JSON.stringify(ordersArray));
+			setArchivedOrders(ordersArray);
+		} catch (err) {
+			console.error("Ошибка сети при тихой загрузке архива:", err);
+		}
+	};
+
 	const fetchArchive = async () => {
 		// 🔥 МАГИЯ КЭША
 		const cached = localStorage.getItem('cached_archive');
@@ -22,24 +34,18 @@ export default function ArchivePage() {
 			setIsLoading(true);
 		}
 
-		try {
-			const res = await api.get('orders/?is_archived=true');
-			const data = res.data;
-			const ordersArray = Array.isArray(data) ? data : (data.results || []);
-			
-			// Обновляем кэш и стейт
-			localStorage.setItem('cached_archive', JSON.stringify(ordersArray));
-			setArchivedOrders(ordersArray);
-		} catch (err) {
-			console.error("Ошибка сети при загрузке архива:", err);
-			toast.error("Не удалось загрузить архив"); // 🔥 Уведомление об ошибке
-		} finally {
-			setIsLoading(false);
-		}
+		await fetchArchiveSilently();
+		setIsLoading(false);
 	};
 
 	useEffect(() => {
 		fetchArchive();
+
+		const intervalId = setInterval(() => {
+			fetchArchiveSilently();
+		}, 3000);
+
+		return () => clearInterval(intervalId);
 	}, []);
 
 	const handleRestore = async (id: number) => {

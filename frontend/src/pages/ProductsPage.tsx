@@ -26,15 +26,7 @@ export default function ProductsPage() {
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 	const [productToDelete, setProductToDelete] = useState<any>(null);
 
-	const fetchProducts = async () => {
-		const cached = localStorage.getItem('cached_products');
-		if (cached) {
-			setProducts(JSON.parse(cached));
-			setIsLoading(false);
-		} else {
-			setIsLoading(true);
-		}
-
+	const fetchProductsSilently = async () => {
 		const token = localStorage.getItem('token');
 		try {
 			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/products/`, {
@@ -53,16 +45,34 @@ export default function ProductsPage() {
 				setProducts(data);
 			}
 		} catch (err) {
-			console.error("Ошибка загрузки:", err);
-			toast.error("Не удалось загрузить товары");
-		} finally {
-			setIsLoading(false);
+			console.error("Ошибка при тихой загрузке:", err);
 		}
+	};
+
+	const fetchProducts = async () => {
+		const cached = localStorage.getItem('cached_products');
+		if (cached) {
+			setProducts(JSON.parse(cached));
+			setIsLoading(false);
+		} else {
+			setIsLoading(true);
+		}
+
+		await fetchProductsSilently();
+		setIsLoading(false);
 	};
 
 	useEffect(() => {
 		fetchProducts();
-	}, []);
+
+		const intervalId = setInterval(() => {
+			if (!isModalOpen && !isDeleteModalOpen) {
+				fetchProductsSilently();
+			}
+		}, 3000);
+
+		return () => clearInterval(intervalId);
+	}, [isModalOpen, isDeleteModalOpen]);
 
 	const openModal = (product = null) => {
 		setEditingProduct(product);

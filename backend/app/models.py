@@ -118,6 +118,7 @@ class Item(models.Model):
     class Meta:
         verbose_name = "Товар заказа"
         verbose_name_plural = "Товары заказа"
+        ordering = ['id']
 
     def __str__(self):
         return f"{self.name} ({self.quantity} шт.)"
