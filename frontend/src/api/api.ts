@@ -19,11 +19,8 @@ api.interceptors.request.use(
 		}
 
 		// 🔥 Отключаем кэширование браузером для всех GET-запросов (решает проблему с возвратом старых статусов)
+		// Используем только query-параметр _t, чтобы не сломать CORS
 		if (config.method?.toLowerCase() === 'get') {
-			config.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-			config.headers.set('Pragma', 'no-cache');
-			config.headers.set('Expires', '0');
-
 			// Добавляем cache-buster параметр в URL
 			config.params = {
 				...config.params,
