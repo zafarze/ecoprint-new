@@ -205,6 +205,8 @@ export default function OrdersPage() {
 			// Выполняем асинхронно без await, чтобы функция завершилась моментально
 			api.patch(`items/${item.id}/`, { status: newStatus }).then(() => {
 				pendingItemIds.current.delete(item.id);
+				// 🔥 После ответа сервера — сразу синхронизируем данные (order.status из бэкенда)
+				fetchOrdersSilently();
 				notifyHeader();
 			}).catch((_e) => {
 				pendingItemIds.current.delete(item.id);
