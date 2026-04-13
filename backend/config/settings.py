@@ -50,13 +50,11 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # ⚠️ CorsMiddleware ОБЯЗАТЕЛЬНО первым — до любых middleware, которые могут перехватить preflight!
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware', # <--- ОБЯЗАТЕЛЬНО: WhiteNoise для раздачи CSS админки в облаке
     'django.contrib.sessions.middleware.SessionMiddleware',
-    
-    # CORS Middleware ОБЯЗАТЕЛЬНО должен быть выше CommonMiddleware
-    'corsheaders.middleware.CorsMiddleware',  
-    
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -180,10 +178,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ==========================================
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "http://127.0.0.1:5173","http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
     "http://127.0.0.1:5174",
     "https://ecoprint-app.web.app",
     "https://ecoprint-app.firebaseapp.com"
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_METHODS = [
+    'DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT',
 ]
 
 CORS_ALLOW_HEADERS = [
