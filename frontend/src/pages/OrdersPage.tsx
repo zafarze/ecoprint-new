@@ -211,8 +211,10 @@ export default function OrdersPage() {
 			// Выполняем асинхронно без await, чтобы функция завершилась моментально
 			api.patch(`items/${item.id}/`, { status: newStatus }).then(() => {
 				pendingItemIds.current.delete(item.id);
-				// 🔥 После ответа сервера — сразу синхронизируем данные (order.status из бэкенда)
-				fetchOrdersSilently();
+				// 🔥 МГНОВЕННО уведомляем ВСЕ браузеры через Firebase RTDB (< 1 сек)
+				import('../firebase').then(({ notifyAllClients }) => notifyAllClients()).catch(() => {});
+				// Обновляем свои данные с сервера
+				fetchOrdersSilentlyRef.current();
 				notifyHeader();
 			}).catch((_e) => {
 				pendingItemIds.current.delete(item.id);

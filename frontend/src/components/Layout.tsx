@@ -7,36 +7,40 @@ import AIChatWidget from './AIChatWidget';
 export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-	// 🔥 НАДЁЖНЫЙ POLLING: рекурсивный setTimeout (как в старом проекте, не throttlится!)
-	// + visibilitychange и focus для мгновенного обновления при переключении окна
+	// 🔥 МГНОВЕННАЯ СИНХРОНИЗАЦИЯ через Firebase Realtime Database
+	// + Резервный polling каждые 5 сек + visibilitychange/focus для надёжности
 	useEffect(() => {
 		const dispatch = () => window.dispatchEvent(new Event('sync-updated'));
 
-		// Рекурсивный setTimeout — следующий вызов планируется ПОСЛЕ завершения текущего.
-		// Браузер меньше throttlит его по сравнению с setInterval в фоновых вкладках.
+		// Резервные методы (всегда активны)
 		let timerId: ReturnType<typeof setTimeout>;
-		const loop = () => {
-			dispatch();
-			timerId = setTimeout(loop, 5000);
-		};
+		const loop = () => { dispatch(); timerId = setTimeout(loop, 5000); };
 		timerId = setTimeout(loop, 5000);
 
-		// МГНОВЕННО при переключении вкладки (tab visibility)
-		const onVisible = () => {
-			if (document.visibilityState === 'visible') dispatch();
-		};
+		const onVisible = () => { if (document.visibilityState === 'visible') dispatch(); };
 		document.addEventListener('visibilitychange', onVisible);
+		window.addEventListener('focus', onVisible);
 
-		// МГНОВЕННО при клике на окно (window focus)
-		const onFocus = () => dispatch();
-		window.addEventListener('focus', onFocus);
+		// === МЕТОД 1: Firebase RTDB Push (МГНОВЕННЫЙ < 1 сек) ===
+		// Async import чтобы не блокировать рендер
+		let unsubscribeFirebase: (() => void) | null = null;
+		(async () => {
+			try {
+				const { subscribeToSync } = await import('../firebase');
+				unsubscribeFirebase = subscribeToSync(dispatch);
+			} catch {
+				// Firebase недоступен — polling продолжит работу
+			}
+		})();
 
 		return () => {
+			unsubscribeFirebase?.();
 			clearTimeout(timerId);
 			document.removeEventListener('visibilitychange', onVisible);
-			window.removeEventListener('focus', onFocus);
+			window.removeEventListener('focus', onVisible);
 		};
 	}, []);
+
 
 	return (
 		<div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">
