@@ -7,27 +7,33 @@ import AIChatWidget from './AIChatWidget';
 export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-	// 🔥 НАДЁЖНЫЙ POLLING: 3 механизма синхронизации, ни один не зависит от браузерного throttling
+	// 🔥 НАДЁЖНЫЙ POLLING: рекурсивный setTimeout (как в старом проекте, не throttlится!)
+	// + visibilitychange и focus для мгновенного обновления при переключении окна
 	useEffect(() => {
 		const dispatch = () => window.dispatchEvent(new Event('sync-updated'));
 
-		// 1) Каждые 4 секунды (работает пока вкладка активна на экране)
-		const interval = setInterval(dispatch, 4000);
+		// Рекурсивный setTimeout — следующий вызов планируется ПОСЛЕ завершения текущего.
+		// Браузер меньше throttlит его по сравнению с setInterval в фоновых вкладках.
+		let timerId: ReturnType<typeof setTimeout>;
+		const loop = () => {
+			dispatch();
+			timerId = setTimeout(loop, 5000);
+		};
+		timerId = setTimeout(loop, 5000);
 
-		// 2) МГНОВЕННО при переключении вкладки (tab focus/unfocus)
-		//    Это главное решение против Chrome throttling фоновых вкладок!
-		const onVisibility = () => {
+		// МГНОВЕННО при переключении вкладки (tab visibility)
+		const onVisible = () => {
 			if (document.visibilityState === 'visible') dispatch();
 		};
-		document.addEventListener('visibilitychange', onVisibility);
+		document.addEventListener('visibilitychange', onVisible);
 
-		// 3) МГНОВЕННО при клике на окно браузера (когда переключаешь между окнами)
+		// МГНОВЕННО при клике на окно (window focus)
 		const onFocus = () => dispatch();
 		window.addEventListener('focus', onFocus);
 
 		return () => {
-			clearInterval(interval);
-			document.removeEventListener('visibilitychange', onVisibility);
+			clearTimeout(timerId);
+			document.removeEventListener('visibilitychange', onVisible);
 			window.removeEventListener('focus', onFocus);
 		};
 	}, []);
