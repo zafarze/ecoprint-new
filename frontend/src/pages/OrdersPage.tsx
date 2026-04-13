@@ -82,6 +82,8 @@ export default function OrdersPage() {
 
 	// 🔒 Набор ID товаров, статус которых сейчас отправляется на сервер (защита от перезаписи поллингом)
 	const pendingItemIds = useRef<Set<number>>(new Set());
+	// 🔥 Ref на актуальную версию fetchOrdersSilently (исправляет stale closure в useEffect)
+	const fetchOrdersSilentlyRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
 	const isModalOpenRef = useRef(false);
 
@@ -129,6 +131,9 @@ export default function OrdersPage() {
 		}
 	};
 
+	// 🔥 Обновляем ref при каждом рендере — handleSync всегда вызывает АКТУАЛЬНУЮ функцию
+	fetchOrdersSilentlyRef.current = fetchOrdersSilently;
+
 	const loadOrders = async () => {
 		// 🔥 МАГИЯ КЭША: Если в браузере уже есть сохраненные заказы, моментально показываем их
 		const cached = localStorage.getItem(CACHE_KEY);
@@ -156,9 +161,10 @@ export default function OrdersPage() {
 		fetchProducts();
 
 		// Мгновенное обновление по событию от глобального пуллера (Layout.tsx)
+		// Используем ref чтобы всегда вызывать АКТУАЛЬНУЮ версию fetchOrdersSilently
 		const handleSync = () => {
 			if (!isModalOpenRef.current) {
-				fetchOrdersSilently();
+				fetchOrdersSilentlyRef.current();
 			}
 		};
 		window.addEventListener('sync-updated', handleSync);

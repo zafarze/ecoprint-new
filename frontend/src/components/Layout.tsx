@@ -7,32 +7,28 @@ import AIChatWidget from './AIChatWidget';
 export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-	// 🔥 Простой и надёжный polling: каждые 4 секунды рассылаем sync-updated всем страницам.
-	// Используем Web Worker, чтобы браузер не замедлял polling до 1 минуты в фоновых вкладках.
-	// OrdersPage сама защищает оптимистичные обновления через pendingItemIds.
+	// 🔥 НАДЁЖНЫЙ POLLING: 3 механизма синхронизации, ни один не зависит от браузерного throttling
 	useEffect(() => {
-		const worker = new Worker(new URL('../workers/pollingWorker.ts', import.meta.url), { type: 'module' });
+		const dispatch = () => window.dispatchEvent(new Event('sync-updated'));
 
-		worker.onmessage = (e) => {
-			if (e.data?.type === 'TICK') {
-				window.dispatchEvent(new Event('sync-updated'));
-			}
+		// 1) Каждые 4 секунды (работает пока вкладка активна на экране)
+		const interval = setInterval(dispatch, 4000);
+
+		// 2) МГНОВЕННО при переключении вкладки (tab focus/unfocus)
+		//    Это главное решение против Chrome throttling фоновых вкладок!
+		const onVisibility = () => {
+			if (document.visibilityState === 'visible') dispatch();
 		};
+		document.addEventListener('visibilitychange', onVisibility);
 
-		worker.postMessage({ type: 'START', interval: 4000 });
-
-		// Мгновенная синхронизация при возвращении пользователя на вкладку
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				window.dispatchEvent(new Event('sync-updated'));
-			}
-		};
-		document.addEventListener('visibilitychange', handleVisibilityChange);
+		// 3) МГНОВЕННО при клике на окно браузера (когда переключаешь между окнами)
+		const onFocus = () => dispatch();
+		window.addEventListener('focus', onFocus);
 
 		return () => {
-			worker.postMessage({ type: 'STOP' });
-			worker.terminate();
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			clearInterval(interval);
+			document.removeEventListener('visibilitychange', onVisibility);
+			window.removeEventListener('focus', onFocus);
 		};
 	}, []);
 
