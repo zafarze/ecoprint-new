@@ -15,23 +15,23 @@ import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 
 import api from '../api/api';
 
-// 🎨 Цветовые схемы для статусов (Серый, Оранжевый, Зеленый)
+// 🎨 Цветовые схемы для статусов
 const CARD_STYLES: Record<string, string> = {
-	'ready': 'bg-emerald-50/40 border-emerald-200 text-emerald-950', // Готово - Зеленый
-	'in-progress': 'bg-orange-50 border-orange-300 text-orange-950 shadow-sm', // В процессе - Оранжевый
-	'not-ready': 'bg-slate-50 border-slate-300 text-slate-800 shadow-sm' // Не готов - Серый (хокистаранг)
+	'ready': 'bg-white border-slate-200 text-slate-800 shadow-sm',
+	'in-progress': 'bg-[#fef8b4] border-transparent text-slate-800 shadow-sm', // Yellowish background
+	'not-ready': 'bg-[#fef8b4] border-transparent text-slate-800 shadow-sm' // Yellowish background
 };
 
 const BADGE_STYLES: Record<string, string> = {
-	'ready': 'bg-emerald-500 text-white hover:bg-emerald-600',
-	'in-progress': 'bg-orange-500 text-white hover:bg-orange-600',
-	'not-ready': 'bg-slate-500 text-white hover:bg-slate-600 shadow-sm'
+	'ready': 'bg-[#10b981] text-white hover:bg-[#059669]', // Green
+	'in-progress': 'bg-[#f59e0b] text-white hover:bg-[#d97706]', // Orange
+	'not-ready': 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed] shadow-sm' // Purple
 };
 
 const BADGE_LABELS: Record<string, string> = {
-	'ready': 'Готово',
-	'in-progress': 'В процессе',
-	'not-ready': 'Не готов'
+	'ready': 'ГОТОВО',
+	'in-progress': 'В ПРОЦЕССЕ',
+	'not-ready': 'НЕ ГОТОВ'
 };
 
 const getLocalDateStr = (offsetDays = 0) => {
@@ -160,16 +160,47 @@ export default function OrdersPage() {
 		loadOrders();
 		fetchProducts();
 
-		// Мгновенное обновление по событию от глобального пуллера (Layout.tsx)
-		// Используем ref чтобы всегда вызывать АКТУАЛЬНУЮ версию fetchOrdersSilently
-		const handleSync = () => {
+		const doFetch = () => {
 			if (!isModalOpenRef.current) {
 				fetchOrdersSilentlyRef.current();
 			}
 		};
-		window.addEventListener('sync-updated', handleSync);
 
-		return () => window.removeEventListener('sync-updated', handleSync);
+		// === МЕТОД 1: Firebase RTDB — мгновенный push (< 1 сек) ===
+		let unsubscribeFb: (() => void) | null = null;
+		(async () => {
+			try {
+				const { subscribeToSync } = await import('../firebase');
+				unsubscribeFb = subscribeToSync(() => {
+					console.log('[EcoPrint] 🔥 Firebase push получен! Обновляю заказы...');
+					doFetch();
+				});
+				console.log('[EcoPrint] ✅ Firebase подписка активна');
+			} catch (e) {
+				console.warn('[EcoPrint] ⚠️ Firebase недоступен, используем polling:', e);
+			}
+		})();
+
+		// === МЕТОД 2: Прямой polling каждые 5 сек (резервный) ===
+		let timerId: ReturnType<typeof setTimeout>;
+		const poll = () => { doFetch(); timerId = setTimeout(poll, 5000); };
+		timerId = setTimeout(poll, 5000);
+
+		// === МЕТОД 3: Мгновенно при переключении вкладки / клике на окно ===
+		const onVisible = () => { if (document.visibilityState === 'visible') doFetch(); };
+		document.addEventListener('visibilitychange', onVisible);
+		window.addEventListener('focus', onVisible);
+
+		// === МЕТОД 4: Слушаем Layout.tsx (для других компонентов тоже) ===
+		window.addEventListener('sync-updated', doFetch);
+
+		return () => {
+			unsubscribeFb?.();
+			clearTimeout(timerId);
+			document.removeEventListener('visibilitychange', onVisible);
+			window.removeEventListener('focus', onVisible);
+			window.removeEventListener('sync-updated', doFetch);
+		};
 	}, []);
 
 	const handleToggleItemStatus = async (item: any, orderId: number) => {
@@ -212,7 +243,7 @@ export default function OrdersPage() {
 			api.patch(`items/${item.id}/`, { status: newStatus }).then(() => {
 				pendingItemIds.current.delete(item.id);
 				// 🔥 МГНОВЕННО уведомляем ВСЕ браузеры через Firebase RTDB (< 1 сек)
-				import('../firebase').then(({ notifyAllClients }) => notifyAllClients()).catch(() => {});
+				import('../firebase').then(({ notifyAllClients }) => notifyAllClients()).catch(() => { });
 				// Обновляем свои данные с сервера
 				fetchOrdersSilentlyRef.current();
 				notifyHeader();
@@ -587,60 +618,76 @@ export default function OrdersPage() {
 								</div>
 
 								{/* ── Список товаров ── */}
-								<div className="px-4 pb-3 space-y-2">
-									{Array.isArray(order.items) && order.items.map((item: any, idx: number) => {
+								<div className="px-4 pb-3 space-y-3">
+									{Array.isArray(order.items) && order.items.map((item: {
+										id: number; status: string; deadline?: string; name: string; quantity: number; comment?: string; responsible_user?: { first_name?: string; username?: string; };
+									}, idx: number) => {
 										let mCardStyle = CARD_STYLES[item.status] || CARD_STYLES['not-ready'];
-										let mBadgeStyle = BADGE_STYLES[item.status] || BADGE_STYLES['not-ready'];
+										const mBadgeStyle = BADGE_STYLES[item.status] || BADGE_STYLES['not-ready'];
 										const mBadgeLabel = BADGE_LABELS[item.status] || 'Статус';
 
 										if (item.status !== 'ready' && item.deadline) {
 											const todayStr = getLocalDateStr(0);
-											if (item.deadline < todayStr) {
-												mCardStyle = 'bg-rose-100 border-rose-400 text-rose-950 shadow-md ring-2 ring-rose-400';
-												mBadgeStyle = 'bg-rose-600 text-white';
-											} else if (item.deadline === todayStr) {
-												mCardStyle = 'bg-red-50/80 border-red-300 text-red-950 shadow-sm ring-1 ring-red-200';
+											if (item.deadline <= todayStr) {
+												mCardStyle = 'bg-[#FEE2E2] border-transparent text-slate-800 shadow-sm';
 											}
 										}
 
 										return (
-											<div key={item.id} className={`rounded-xl border-2 p-3 ${mCardStyle}`}>
+											<div key={item.id} className={`rounded-[20px] p-4 relative ${item.status === 'ready' ? 'border-2' : ''} ${mCardStyle}`}>
+
 												{/* Название + количество */}
-												<div className="flex items-center gap-2 mb-2">
-													<div className="w-5 h-5 rounded-full bg-white border border-slate-200 text-primary flex items-center justify-center text-[10px] font-black shrink-0 shadow-inner">{idx + 1}</div>
-													<div className="font-black text-sm leading-tight flex-1">{item.name} <span className="font-medium text-slate-500 text-xs">×{item.quantity} шт</span></div>
-												</div>
-												{/* Даты + ответственный */}
-												<div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold mb-2.5 pl-7">
-													<div className="flex items-center gap-1 text-slate-500">
-														<PlayCircle size={11} className="text-slate-400" />
-														{formatDateToRu(order.created_at)}
+												<div className="flex items-start gap-3 mb-2 relative z-10">
+													<div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-white flex items-center justify-center text-sm font-bold shrink-0 shadow-md z-10 relative">
+														{idx + 1}
 													</div>
-													<div className={`flex items-center gap-1 ${getDeadlineStyles(item.deadline)}`}>
-														<Flag size={11} />
-														{formatDateToRu(item.deadline)}
-													</div>
-													{item.responsible_user && (
-														<div className="flex items-center gap-1 text-slate-500">
-															<User size={11} className="text-slate-400" />
-															{item.responsible_user.first_name || item.responsible_user.username}
+													<div className="flex flex-col flex-1 mt-1">
+														<div className="font-bold text-[17px] text-slate-800 leading-tight">{item.name}</div>
+														<div className="inline-block px-3 py-1 bg-white rounded-lg border border-slate-200 mt-2 w-max text-slate-500 text-sm font-medium">
+															{item.quantity} шт.
 														</div>
-													)}
+													</div>
 												</div>
+
+												<div className="flex flex-col gap-2 mt-4 pl-[4px]">
+													<div className="flex justify-between items-start">
+														<div className="flex flex-col gap-1.5 text-sm font-medium">
+															<div className="flex items-center gap-1.5 text-slate-500">
+																<PlayCircle size={15} className="text-slate-400 fill-slate-200" />
+																{formatDateToRu(order.created_at)}
+															</div>
+															<div className={`flex items-center gap-1.5 ${getDeadlineStyles(item.deadline || '')}`}>
+																<Flag size={15} className="text-rose-400 fill-rose-100" />
+																{formatDateToRu(item.deadline || '')}
+															</div>
+															{item.responsible_user && (
+																<div className="flex items-center gap-1.5 text-slate-700 mt-1 font-bold">
+																	<User size={15} className="text-slate-500 fill-slate-200" />
+																	{item.responsible_user.first_name || item.responsible_user.username}
+																</div>
+															)}
+														</div>
+
+														{/* Большая кнопка статуса */}
+														<button
+															onClick={() => handleToggleItemStatus(item, order.id)}
+															className={`px-5 py-2.5 rounded-xl text-sm font-bold tracking-wide transition-transform active:scale-95 shadow-md ${mBadgeStyle}`}
+														>
+															{mBadgeLabel}
+														</button>
+													</div>
+												</div>
+
 												{/* Комментарий */}
 												{item.comment && (
-													<div className="flex items-start gap-1.5 text-xs font-medium text-slate-600 pl-7 mb-2.5">
-														<MessageSquare size={11} className="mt-0.5 shrink-0 text-slate-400" />
-														<span>{item.comment}</span>
+													<div className="flex items-start gap-3 mt-4 text-sm font-medium text-slate-500">
+														<div className="w-[3px] h-[34px] bg-slate-300/60 rounded-full mt-1"></div>
+														<div className="flex items-start gap-2 flex-1">
+															<MessageSquare size={16} className="mt-0.5 shrink-0 text-slate-400 fill-slate-200" />
+															<span className="leading-snug">{item.comment}</span>
+														</div>
 													</div>
 												)}
-												{/* Большая кнопка статуса — удобна для пальца */}
-												<button
-													onClick={() => handleToggleItemStatus(item, order.id)}
-													className={`w-full py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-transform active:scale-95 ${mBadgeStyle}`}
-												>
-													{mBadgeLabel}
-												</button>
 											</div>
 										);
 									})}
@@ -705,7 +752,7 @@ export default function OrdersPage() {
 							) : (
 								paginatedOrders.map((order, orderIndex) => {
 									// Проверяем, есть ли просроченные товары в заказе
-									const isOrderOverdue = Array.isArray(order.items) && order.items.some((i: any) => i.status !== 'ready' && i.deadline && i.deadline < getLocalDateStr(0));
+									const isOrderOverdue = Array.isArray(order.items) && order.items.some((i: { status: string, deadline?: string }) => i.status !== 'ready' && i.deadline && i.deadline < getLocalDateStr(0));
 
 									return (
 										<tr key={order.id} className="bg-white hover:bg-slate-50/30 group">
@@ -743,19 +790,18 @@ export default function OrdersPage() {
 
 											<td className="px-6 py-6 align-top">
 												<div className="flex flex-col gap-3.5">
-													{Array.isArray(order.items) && order.items.map((item: any, idx: number) => {
+													{Array.isArray(order.items) && order.items.map((item: {
+														id: number; status: string; deadline?: string; name: string; quantity: number; comment?: string; responsible_user?: { first_name?: string; username?: string; };
+													}, idx: number) => {
 														let currentCardStyle = CARD_STYLES[item.status] || CARD_STYLES['not-ready'];
-														let currentBadgeStyle = BADGE_STYLES[item.status] || BADGE_STYLES['not-ready'];
+														const currentBadgeStyle = BADGE_STYLES[item.status] || BADGE_STYLES['not-ready'];
 														const currentBadgeLabel = BADGE_LABELS[item.status] || 'Неизвестно';
 
-														// Красный цвет только если реально просрочено
+														// Когда карточка ближе к deadline (сегодня или просрочена), меняем только фон
 														if (item.status !== 'ready' && item.deadline) {
 															const todayStr = getLocalDateStr(0);
-															if (item.deadline < todayStr) {
-																currentCardStyle = 'bg-rose-100 border-rose-400 text-rose-950 shadow-md ring-2 ring-rose-400';
-																currentBadgeStyle = 'bg-rose-600 text-white hover:bg-rose-700 shadow-sm';
-															} else if (item.deadline === todayStr) {
-																currentCardStyle = 'bg-red-50/80 border-red-300 text-red-950 shadow-sm ring-1 ring-red-200';
+															if (item.deadline <= todayStr) {
+																currentCardStyle = 'bg-[#FEE2E2] border-transparent text-slate-800 shadow-sm';
 															}
 														}
 
@@ -764,11 +810,16 @@ export default function OrdersPage() {
 																<div className="flex items-center justify-between gap-4">
 																	<div className="flex items-center gap-3.5">
 																		<div className="w-6 h-6 rounded-full bg-white border border-slate-200 text-primary flex items-center justify-center text-xs font-black shrink-0 shadow-inner">{idx + 1}</div>
-																		<div className="font-black text-sm tracking-tight">{item.name} <span className="text-slate-500 font-medium ml-1">×{item.quantity} шт</span></div>
+																		<div className="font-black text-sm tracking-tight flex items-center flex-wrap gap-2">
+																			{item.name}
+																			<span className="inline-flex items-center justify-center px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[13px] font-bold text-slate-600 shadow-sm whitespace-nowrap">
+																				{item.quantity} шт.
+																			</span>
+																		</div>
 
 																		<div className="flex flex-col text-xs sm:text-[13px] font-black ml-1 sm:ml-4 border-l-2 border-slate-200/50 pl-4 space-y-1">
 																			<div className="flex items-center gap-2 text-slate-500"><PlayCircle size={14} className="text-slate-400" /> {formatDateToRu(order.created_at)}</div>
-																			<div className={`flex items-center gap-2 ${getDeadlineStyles(item.deadline)}`}><Flag size={14} /> {formatDateToRu(item.deadline)}</div>
+																			<div className={`flex items-center gap-2 ${getDeadlineStyles(item.deadline || '')}`}><Flag size={14} /> {formatDateToRu(item.deadline || '')}</div>
 																		</div>
 
 																		<div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-700 ml-4 bg-white/70 px-2.5 py-1.5 rounded-lg border border-slate-100/80 shadow-inner">

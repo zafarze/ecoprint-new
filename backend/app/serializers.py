@@ -143,6 +143,9 @@ class BaseOrderSerializer(serializers.ModelSerializer):
             items_to_show = [item for item in obj.items.all() if item.is_archived]
         else:
             items_to_show = [item for item in obj.items.all() if not item.is_archived]
+            
+        # Сортируем товары по ID, чтобы они не меняли порядок при обновлении статуса
+        items_to_show.sort(key=lambda x: x.id)
         return ItemSerializer(items_to_show, many=True).data
 
 

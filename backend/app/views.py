@@ -115,9 +115,21 @@ class OrderViewSet(viewsets.ModelViewSet):
                 Order.objects.filter(id__in=order_ids).update(is_archived=True)
                 Item.objects.filter(order_id__in=order_ids).update(is_archived=True)
                 
+        # --- БЛОК АВТОМАТИЧЕСКОГО УДАЛЕНИЯ ИЗ АРХИВА ЧЕРЕЗ 30 ДНЕЙ ---
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        orders_to_delete = Order.objects.filter(
+            is_archived=True,
+            updated_at__lte=thirty_days_ago
+        )
+        
+        delete_count = orders_to_delete.count()
+        if delete_count > 0:
+            with transaction.atomic():
+                orders_to_delete.delete()
+
         return Response({
-            'status': 'success', 
-            'message': f'{len(order_ids)} заказов автоматически отправлено в архив.'
+            'status': 'success',
+            'message': f'{len(order_ids)} заказов отправлено в архив. {delete_count} удалено из архива навсегда.'
         })
 
     def partial_update(self, request, *args, **kwargs):
