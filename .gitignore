@@ -1,2 +1,28 @@
 .venv/
 EcoPrint_old/
+
+# Claude Code локальные файлы
+.claude/
+
+# Firebase локальный кэш
+**/.firebase/
+
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+
+# Node
+node_modules/
+
+# Build outputs
+frontend/dist/
+
+# Env / secrets
+.env
+.env.local
+*.local
+
+# OS
+.DS_Store
+Thumbs.db

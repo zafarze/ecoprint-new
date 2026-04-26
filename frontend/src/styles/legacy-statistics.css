@@ -1,0 +1,221 @@
+/* static/css/statistics.css */
+
+:root {
+    --primary-color: #3b82f6; /* Синий */
+    --success-color: #10b981; /* Зеленый */
+    --warning-color: #f59e0b; /* Оранжевый */
+    --danger-color: #ef4444;  /* Красный */
+    --purple-color: #8b5cf6;  /* Фиолетовый */
+    
+    --bg-card: #ffffff;
+    --bg-page: #f3f4f6;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Анимация появления */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.main-content {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* --- Заголовок --- */
+.filters-header-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 5px;
+}
+
+.filters-header-title i {
+    color: var(--primary-color);
+}
+
+/* --- Переключатель Периодов (iOS Style) --- */
+.stats-controls-wrapper {
+    display: flex;
+    margin-bottom: 30px;
+}
+
+.stats-controls {
+    display: inline-flex;
+    background: #e2e8f0; /* Светло-серый фон контейнера */
+    padding: 5px;
+    border-radius: 12px;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
+}
+
+.btn-stat {
+    position: relative;
+    padding: 8px 24px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+}
+
+.btn-stat:hover {
+    color: var(--text-main);
+}
+
+/* Активное состояние кнопки */
+.btn-stat.active {
+    background-color: #ffffff;
+    color: var(--primary-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: scale(1.02); /* Легкое увеличение */
+}
+
+/* --- KPI Карточки --- */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 25px;
+    margin-bottom: 35px;
+}
+
+.kpi-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid rgba(0,0,0,0.03);
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Декоративная полоска сверху вместо старой слева */
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--card-color, var(--primary-color)); /* Цвет меняется через inline style */
+}
+
+.kpi-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+    /* Цвета задаются в HTML через style */
+}
+
+.kpi-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.kpi-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
+
+.kpi-label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* --- Графики --- */
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr; /* Пирог поменьше, Линия пошире */
+    gap: 25px;
+    margin-bottom: 40px;
+}
+
+.chart-container {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(0,0,0,0.03);
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-container h3 {
+    margin: 0 0 20px 0;
+    font-size: 1.25rem;
+    color: var(--text-main);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+canvas {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 350px;
+}
+
+/* --- Адаптивность (Mobile) --- */
+@media (max-width: 1024px) {
+    .chart-grid {
+        grid-template-columns: 1fr; /* Графики друг под другом */
+    }
+}
+
+@media (max-width: 768px) {
+    .kpi-grid {
+        grid-template-columns: 1fr; /* Одна колонка KPI */
+    }
+    
+    .stats-controls-wrapper {
+        justify-content: center; /* Кнопки по центру на мобиле */
+    }
+    
+    .stats-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .btn-stat {
+        flex: 1; /* Кнопки растягиваются равномерно */
+        text-align: center;
+        padding: 8px 10px;
+    }
+    
+    .kpi-value {
+        font-size: 1.8rem;
+    }
+}

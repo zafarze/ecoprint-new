@@ -1,124 +1,61 @@
-import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BarChart2, Package, Archive, Settings, X, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 
 interface SidebarProps {
 	isOpen: boolean;
 	onClose: () => void;
+	isCollapsed: boolean;
+	onToggleCollapse: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-	const [isCollapsed, setIsCollapsed] = useState(false);
-	// useNavigate нам больше не нужен для логаута, но мы его оставим, вдруг пригодится
-
-
-	// Получаем текущую роль пользователя для бокового меню
+export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: SidebarProps) {
 	const userStr = localStorage.getItem('user');
 	const user = userStr && userStr !== 'undefined' ? JSON.parse(userStr) : null;
-	const role = user?.role || 'worker'; // По умолчанию самые низкие права
+	const role = user?.role || 'worker';
 
-	// Настройка доступов: у какого пункта меню какая роль имеет доступ
 	const menuItemsData = [
-		{ path: '/', icon: Home, label: 'Главная', allowedRoles: ['superadmin', 'manager', 'worker'] },
-		{ path: '/statistics', icon: BarChart2, label: 'Статистика', allowedRoles: ['superadmin'] },
-		{ path: '/products', icon: Package, label: 'Товары', allowedRoles: ['superadmin', 'manager'] },
-		{ path: '/archive', icon: Archive, label: 'Архив заказов', allowedRoles: ['superadmin', 'manager'] },
-		{ path: '/settings', icon: Settings, label: 'Настройки', allowedRoles: ['superadmin'] },
+		{ path: '/', icon: 'fa-home', label: 'Главная', allowedRoles: ['superadmin', 'manager', 'worker'], end: true },
+		{ path: '/statistics', icon: 'fa-chart-bar', label: 'Статистика', allowedRoles: ['superadmin'] },
+		{ path: '/products', icon: 'fa-boxes', label: 'Товары', allowedRoles: ['superadmin', 'manager'] },
+		{ path: '/archive', icon: 'fa-archive', label: 'Архив заказов', allowedRoles: ['superadmin', 'manager'] },
+		{ path: '/settings', icon: 'fa-cog', label: 'Настройки', allowedRoles: ['superadmin'] },
 	];
 
-	// Фильтруем меню так, чтобы пользователь видел только то, что ему разрешено
 	const menuItems = menuItemsData.filter(item => item.allowedRoles.includes(role));
 
-	// 🔥 Изменили только эту функцию
-	const handleLogout = () => {
-		localStorage.removeItem('token');
-		localStorage.removeItem('user');
-		// Заменяем navigate на window.location.href, чтобы жестко сбросить все стейты React
-		window.location.href = '/login';
-	};
-
 	return (
-		<>
-			{/* Мобильный затемненный фон */}
-			{isOpen && (
-				<div
-					className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden transition-opacity"
-					onClick={onClose}
-				/>
-			)}
-
-			{/* Сам сайдбар */}
-			<aside
-				className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 shadow-xl lg:shadow-none lg:static transform transition-all duration-300 ease-in-out flex flex-col 
-                    ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} 
-                    ${isCollapsed ? 'w-72 lg:w-24' : 'w-72 lg:w-72'}
-                `}
-			>
-				{/* Логотип */}
-				<div className={`h-20 flex items-center border-b border-slate-100 transition-all duration-300 ${isCollapsed ? 'lg:justify-center px-6 lg:px-0 justify-between' : 'justify-between px-6'}`}>
-					<NavLink to="/" onClick={onClose} className="flex items-center gap-3 group" title="На главную">
-						<span className="text-3xl filter drop-shadow-sm animate-float shrink-0">🦋</span>
-						<div className={`text-2xl font-black tracking-tight text-slate-800 whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'lg:opacity-0 lg:w-0 lg:overflow-hidden' : 'opacity-100 w-auto'}`}>
-							<span className="text-eco-pink">Эко</span>
-							<span className="text-eco-blue">Принт</span>
-						</div>
-					</NavLink>
-					{/* Кнопка закрытия только для мобилок */}
-					<button onClick={onClose} className="lg:hidden p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors shrink-0">
-						<X size={24} />
-					</button>
+		<nav className={`sidebar ${isOpen ? 'show' : ''}`}>
+			<NavLink to="/" end className="sidebar-logo-link" onClick={onClose}>
+				<div className="logo">
+					<div className="logo-text">
+						<span className="eco">Эко</span><span className="print">Принт</span>
+					</div>
 				</div>
+			</NavLink>
 
-				{/* Навигация */}
-				<nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
-					{menuItems.map((item) => (
+			<ul className="sidebar-menu">
+				{menuItems.map(item => (
+					<li key={item.path}>
 						<NavLink
-							key={item.path}
 							to={item.path}
+							end={item.end}
 							onClick={onClose}
+							className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
 							title={isCollapsed ? item.label : undefined}
-							className={({ isActive }) =>
-								`flex items-center px-4 py-3.5 rounded-2xl font-bold transition-all duration-200 ${isActive
-									? 'bg-gradient-eco shadow-eco-md text-white'
-									: 'text-slate-500 hover:bg-slate-50 hover:text-primary hover:scale-[1.02]'
-								} ${isCollapsed ? 'gap-0 lg:justify-center lg:px-0' : 'gap-4'}`
-							}
 						>
-							<item.icon size={20} className="shrink-0" />
-							<span className={`whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'lg:opacity-0 lg:w-0 lg:overflow-hidden' : 'opacity-100 w-auto'}`}>
-								{item.label}
-							</span>
+							<i className={`fas ${item.icon}`}></i>
+							<span className="menu-text">{item.label}</span>
 						</NavLink>
-					))}
-				</nav>
+					</li>
+				))}
+			</ul>
 
-				{/* 🔥 Подвал сайдбара: Выход + Сворачивание */}
-				<div className={`p-4 border-t border-slate-100 flex ${isCollapsed ? 'flex-col items-center gap-4' : 'items-center justify-between'} mt-auto`}>
-
-					{/* Кнопка Выхода */}
-					<button
-						onClick={handleLogout}
-						className={`flex items-center text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 outline-none ${isCollapsed ? 'p-3 justify-center w-full' : 'px-4 py-2 gap-3 w-full max-w-[140px]'
-							}`}
-						title="Выйти из системы"
-					>
-						<LogOut size={20} className="shrink-0" />
-						<span className={`whitespace-nowrap font-bold transition-all duration-300 ${isCollapsed ? 'hidden' : 'block'}`}>
-							Выход
-						</span>
-					</button>
-
-					{/* Яркая кнопка сворачивания (скрыта на мобилках) */}
-					<button
-						onClick={() => setIsCollapsed(!isCollapsed)}
-						className={`hidden lg:flex rounded-xl text-white bg-gradient-eco shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300 items-center justify-center shrink-0 outline-none ${isCollapsed ? 'p-3 w-full' : 'p-2'
-							}`}
-						title={isCollapsed ? 'Развернуть меню' : 'Свернуть меню'}
-					>
-						{isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-					</button>
-				</div>
-			</aside>
-		</>
+			<button
+				className="sidebar-toggle-btn"
+				onClick={onToggleCollapse}
+				title={isCollapsed ? 'Развернуть' : 'Свернуть'}
+			>
+				<i className="fas fa-chevron-left"></i>
+			</button>
+		</nav>
 	);
 }

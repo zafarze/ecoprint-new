@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Building2, Loader2 } from 'lucide-react';
+// src/settings/CompanySettings.tsx — точ-в-точ company_settings.html
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import { Input, Label } from '../components/ui/Form';
+import api from '../api/api';
 
 export default function CompanySettings() {
 	const [companyName, setCompanyName] = useState('');
@@ -12,105 +11,62 @@ export default function CompanySettings() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isSaving, setIsSaving] = useState(false);
 
-	// Загружаем настройки при открытии страницы
 	useEffect(() => {
-		const fetchSettings = async () => {
-			const token = localStorage.getItem('token');
+		(async () => {
 			try {
-				// ИЗМЕНЕНО: Используем переменную окружения
-				const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/company/`, {
-					headers: { 'Authorization': `Bearer ${token}` }
-				});
-				if (res.ok) {
-					const data = await res.json();
-					setCompanyName(data.company_name || '');
-					setAddress(data.address || '');
-					setPhone(data.phone || '');
-				}
-			} catch (error) {
-				console.error('Ошибка загрузки данных компании:', error);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-		fetchSettings();
+				const res = await api.get('settings/company/');
+				setCompanyName(res.data.company_name || '');
+				setAddress(res.data.address || '');
+				setPhone(res.data.phone || '');
+			} catch (e) { console.error(e); }
+			finally { setIsLoading(false); }
+		})();
 	}, []);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setIsSaving(true);
-		const token = localStorage.getItem('token');
-
 		try {
-			// ИЗМЕНЕНО: Используем переменную окружения
-			const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/company/`, {
-				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${token}`
-				},
-				body: JSON.stringify({
-					company_name: companyName,
-					address: address,
-					phone: phone
-				})
-			});
-
-			if (res.ok) {
-				toast.success("Данные компании успешно сохранены!");
-			} else {
-				toast.error("Ошибка при сохранении данных.");
-			}
-		} catch (error) {
-			toast.error("Ошибка соединения с сервером.");
-		} finally {
-			setIsSaving(false);
-		}
+			await api.put('settings/company/', { company_name: companyName, address, phone });
+			toast.success('Данные компании сохранены!');
+		} catch { toast.error('Ошибка при сохранении.'); }
+		finally { setIsSaving(false); }
 	};
 
-	if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>;
+	if (isLoading) return <div className="container"><div className="empty-state"><i className="fas fa-spinner fa-spin"></i><h3>Загрузка...</h3></div></div>;
 
 	return (
-		<div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4">
-			<h2 className="text-2xl font-black text-slate-800 flex items-center gap-3 mb-6">
-				<Building2 className="text-emerald-500" size={28} strokeWidth={2.5} />
-				Профиль компании
-			</h2>
-
-			<Card>
-				<form onSubmit={handleSubmit} className="space-y-5">
-					<div>
-						<Label>Название компании</Label>
-						<Input
-							value={companyName}
-							onChange={e => setCompanyName(e.target.value)}
-							placeholder="Например: ООО ЭкоПринт"
-						/>
+		<div className="container">
+			<div className="main-content">
+				<form className="filters-card" style={{ margin: '20px 0' }} onSubmit={handleSubmit}>
+					<div className="filters-header-title" style={{ marginBottom: 25 }}>
+						<i className="fas fa-building"></i>
+						<span> Данные компании</span>
 					</div>
 
-					<div>
-						<Label>Юридический / Фактический адрес</Label>
-						<Input
-							value={address}
-							onChange={e => setAddress(e.target.value)}
-							placeholder="Полный адрес"
-						/>
+					<div className="form-group">
+						<label>Название компании:</label>
+						<input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Например: ООО ЭкоПринт" />
+					</div>
+					<div className="form-group">
+						<label>Адрес:</label>
+						<input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Полный адрес" />
+					</div>
+					<div className="form-group">
+						<label>Телефон:</label>
+						<input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+992 00 000 0000" />
 					</div>
 
-					<div>
-						<Label>Контактный телефон</Label>
-						<Input
-							value={phone}
-							onChange={e => setPhone(e.target.value)}
-							placeholder="+992 00 000 0000"
-						/>
-					</div>
-
-					<div className="pt-4 flex justify-end">
-						<Button type="submit" isLoading={isSaving}>Сохранить изменения</Button>
+					<div className="form-actions" style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 20 }}>
+						<button type="submit" className="btn btn-content" disabled={isSaving}>
+							<i className="fas fa-save"></i> {isSaving ? 'Сохранение...' : 'Сохранить данные'}
+						</button>
+						<Link to="/settings" className="btn" style={{ marginLeft: 15, background: 'white', color: 'var(--text-color)', border: '1px solid var(--border-color)' }}>
+							Назад к настройкам
+						</Link>
 					</div>
 				</form>
-			</Card>
+			</div>
 		</div>
 	);
 }

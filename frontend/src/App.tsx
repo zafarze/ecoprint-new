@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { Toaster, toast } from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
 
 import Layout from './components/Layout';
 import OrdersPage from './pages/OrdersPage';
@@ -21,6 +21,8 @@ import UserManagement from './settings/UserManagement';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { useEffect } from 'react';
 import api from './api/api';
+import { playNotificationSound } from './utils/sound';
+import { showNotification, isPopupEnabled } from './utils/notification';
 
 // === ГЛОБАЛЬНЫЙ НАБЛЮДАТЕЛЬ ЗА НОВЫМИ ЗАКАЗАМИ ===
 const GlobalObserver = () => {
@@ -47,18 +49,15 @@ const GlobalObserver = () => {
         }
 
         if (has_new && new_orders && new_orders.length > 0) {
-          // Звук
+          // Звук — Web Audio API (без внешнего файла, надёжно после первого клика)
           if (settings.sound) {
-            const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-            audio.volume = 0.5;
-            audio.play().catch(e => console.error("Звук заблокирован политикой автоплея:", e));
+            playNotificationSound();
           }
 
-          // Всплывающие окна
-          if (settings.popup) {
-            new_orders.forEach((o: any) => {
-              toast.success(`Новый заказ: ${o.client} (№${o.id})!`, { icon: '🔥', duration: 10000 });
-            });
+          // Всплывающие окна (legacy notification, bottom-right с крестиком)
+          if (settings.popup && isPopupEnabled()) {
+            const lines = new_orders.map((o: { id: number; client: string }) => `№${o.id} — ${o.client}`).join('\n');
+            showNotification('🔥 Новый заказ!', lines, 'success');
           }
         }
       } catch (err) {

@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Save, Package } from 'lucide-react';
-import BaseModal from '../components/ui/BaseModal';
-import Button from '../components/ui/Button';
-import { Input, Label, Select } from '../components/ui/Form';
+// src/modals/ProductModal.tsx — стиль legacy .modal
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
+import React, { useEffect, useState } from 'react';
 
 interface ProductModalProps {
 	isOpen: boolean;
@@ -17,16 +15,17 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData }: P
 	const [icon, setIcon] = useState('fas fa-box');
 
 	useEffect(() => {
+		if (!isOpen) return;
 		if (initialData) {
-			setName(initialData.name);
-			setCategory(initialData.category);
-			setIcon(initialData.icon || '');
+			setName(initialData.name || '');
+			setCategory(initialData.category || 'polygraphy');
+			setIcon(initialData.icon || 'fas fa-box');
 		} else {
-			setName('');
-			setCategory('polygraphy');
-			setIcon('fas fa-box');
+			setName(''); setCategory('polygraphy'); setIcon('fas fa-box');
 		}
 	}, [initialData, isOpen]);
+
+	if (!isOpen) return null;
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -34,77 +33,59 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData }: P
 	};
 
 	return (
-		<BaseModal
-			isOpen={isOpen}
-			onClose={onClose}
-			title={initialData ? 'Редактировать товар' : 'Новый товар'}
-			maxWidth="max-w-md"
-		>
-			<form onSubmit={handleSubmit} className="space-y-6">
-
-				{/* Индикатор текущего действия */}
-				<div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-2">
-					<div className="w-10 h-10 rounded-xl bg-gradient-eco text-white flex items-center justify-center shadow-md">
-						<Package size={20} />
-					</div>
-					<div>
-						<p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Карточка товара</p>
-						<p className="text-sm font-black text-slate-700">
-							{initialData ? 'Изменение данных' : 'Добавление в базу'}
-						</p>
+		<div className="modal active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+			<div className="modal-content" style={{ maxWidth: 600 }}>
+				<div className="modal-header">
+					<div className="modal-header-content">
+						<div>
+							<h2>{initialData ? 'Редактировать товар' : 'Новый товар'}</h2>
+							<div className="modal-header-subtitle">Карточка ассортимента</div>
+						</div>
+						<button className="close-btn" type="button" onClick={onClose}>&times;</button>
 					</div>
 				</div>
 
-				<div className="space-y-4">
-					<div>
-						<Label>Название товара *</Label>
-						<Input
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="Например: Визитки 4+4"
-							required
-						/>
-					</div>
-
-					<div>
-						<Label>Категория *</Label>
-						<Select
-							value={category}
-							onChange={(e) => setCategory(e.target.value)}
-							options={[
-								{ value: 'polygraphy', label: 'Полиграфия' },
-								{ value: 'packaging', label: 'Упаковка' },
-								{ value: 'souvenirs', label: 'Сувениры' },
-								{ value: 'large-format', label: 'Широкоформатная печать' },
-							]}
-						/>
-					</div>
-
-					<div>
-						<Label>Иконка (FontAwesome)</Label>
-						<Input
-							value={icon}
-							onChange={(e) => setIcon(e.target.value)}
-							placeholder="Например: fas fa-print"
-						/>
-						<p className="text-xs font-bold text-slate-400 mt-2 flex items-center gap-2">
-							Превью иконки:
-							<span className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-slate-700">
-								<i className={icon}></i>
-							</span>
-						</p>
-					</div>
+				<div className="modal-body">
+					<form onSubmit={handleSubmit}>
+						<div className="form-section">
+							<div className="form-group">
+								<label>Название товара *</label>
+								<input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Например: Визитки 4+4" />
+							</div>
+							<div className="form-group">
+								<label>Категория *</label>
+								<div className="custom-select">
+									<select value={category} onChange={e => setCategory(e.target.value)}>
+										<option value="polygraphy">Полиграфия</option>
+										<option value="packaging">Упаковка</option>
+										<option value="souvenirs">Сувениры</option>
+										<option value="large-format">Широкоформатная печать</option>
+									</select>
+								</div>
+							</div>
+							<div className="form-group">
+								<label>Иконка (FontAwesome)</label>
+								<input type="text" value={icon} onChange={e => setIcon(e.target.value)} placeholder="Например: fas fa-print" />
+								<div style={{ marginTop: 8, fontSize: 13, color: '#6b7280' }}>
+									Превью: <i className={icon} style={{ marginLeft: 8, fontSize: 18 }}></i>
+								</div>
+							</div>
+						</div>
+					</form>
 				</div>
 
-				<div className="pt-4 flex gap-3">
-					<Button type="button" variant="ghost" onClick={onClose} className="w-full">
-						Отмена
-					</Button>
-					<Button type="submit" variant="primary" icon={<Save size={18} />} className="w-full">
-						Сохранить
-					</Button>
+				<div className="modal-footer">
+					<div className="order-summary"></div>
+					<div className="form-actions">
+						<button type="button" className="btn-cancel" onClick={onClose}>
+							<i className="fas fa-times"></i>Отмена
+						</button>
+						<button type="button" className="btn-save" onClick={handleSubmit as any}>
+							<i className="fas fa-save"></i>Сохранить
+						</button>
+					</div>
 				</div>
-			</form>
-		</BaseModal>
+			</div>
+		</div>
 	);
 }

@@ -1,295 +1,204 @@
-import { useState, useEffect, useRef } from 'react';
-import { UserCircle, Save, Camera, KeyRound, ShieldCheck, Loader2 } from 'lucide-react';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import { Input, Label } from '../components/ui/Form';
+// src/pages/ProfilePage.tsx — точ-в-точ profile_page.html
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../api/api';
 
 export default function ProfilePage() {
 	const [firstName, setFirstName] = useState('');
 	const [lastName, setLastName] = useState('');
+	const [username, setUsername] = useState('');
+	const [email, setEmail] = useState('');
 	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-	const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-	const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-	const [newPassword, setNewPassword] = useState('');
-	const [confirmPassword, setConfirmPassword] = useState('');
-	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [oldPassword, setOldPassword] = useState('');
+	const [newPassword1, setNewPassword1] = useState('');
+	const [newPassword2, setNewPassword2] = useState('');
+
+	const [isSavingProfile, setIsSavingProfile] = useState(false);
+	const [isChangingPassword, setIsChangingPassword] = useState(false);
+	const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
-	// Загружаем данные профиля с сервера (включая аватар)
 	useEffect(() => {
-		// Сначала быстро показываем из localStorage
 		const userStr = localStorage.getItem('user');
-		if (userStr) {
-			const user = JSON.parse(userStr);
-			setFirstName(user.first_name || user.username || '');
-			setLastName(user.last_name || '');
+		if (userStr && userStr !== 'undefined') {
+			try {
+				const u = JSON.parse(userStr);
+				setFirstName(u.first_name || '');
+				setLastName(u.last_name || '');
+				setUsername(u.username || '');
+				setEmail(u.email || '');
+				if (u.avatar_url) setAvatarUrl(u.avatar_url);
+			} catch { /* ok */ }
 		}
 
-		// Потом подгружаем актуальный аватар с сервера
-		api.get('profile/me/')
-			.then(res => {
-				const data = res.data;
-				if (data.avatar_url) {
-					setAvatarUrl(data.avatar_url);
-				}
-				setFirstName(data.first_name || data.username || '');
-				setLastName(data.last_name || '');
+		api.get('profile/me/').then(res => {
+			const d = res.data;
+			setFirstName(d.first_name || ''); setLastName(d.last_name || '');
+			setUsername(d.username || ''); setEmail(d.email || '');
+			if (d.avatar_url) setAvatarUrl(d.avatar_url);
 
-				// Обновляем localStorage актуальными данными с сервера
-				const userStr = localStorage.getItem('user');
-				if (userStr) {
+			const userStr = localStorage.getItem('user');
+			if (userStr && userStr !== 'undefined') {
+				try {
 					const user = JSON.parse(userStr);
-					user.first_name = data.first_name;
-					user.last_name = data.last_name;
-					user.avatar_url = data.avatar_url;
+					user.first_name = d.first_name; user.last_name = d.last_name;
+					user.email = d.email; user.avatar_url = d.avatar_url;
 					localStorage.setItem('user', JSON.stringify(user));
 					window.dispatchEvent(new Event('profile-updated'));
-				}
-			})
-			.catch(() => {/* молча игнорируем */});
+				} catch { /* ok */ }
+			}
+		}).catch(() => { /* ignore */ });
 	}, []);
 
-	// Обработчик выбора файла
 	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (!file) return;
-
-		// Мгновенный превью
 		const localUrl = URL.createObjectURL(file);
 		setAvatarUrl(localUrl);
-
 		setIsUploadingAvatar(true);
-		const loadingToast = toast.loading('Загружаю фото...');
-
+		const t = toast.loading('Загружаю фото...');
 		try {
-			const formData = new FormData();
-			formData.append('avatar', file);
-
-			const res = await api.post('profile/upload-avatar/', formData, {
-				headers: { 'Content-Type': 'multipart/form-data' },
-			});
-
+			const fd = new FormData();
+			fd.append('avatar', file);
+			const res = await api.post('profile/upload-avatar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
 			setAvatarUrl(res.data.avatar_url);
-			
-			// Обновляем localStorage
 			const userStr = localStorage.getItem('user');
-			if (userStr) {
-				const user = JSON.parse(userStr);
-				user.avatar_url = res.data.avatar_url;
-				localStorage.setItem('user', JSON.stringify(user));
+			if (userStr && userStr !== 'undefined') {
+				const u = JSON.parse(userStr);
+				u.avatar_url = res.data.avatar_url;
+				localStorage.setItem('user', JSON.stringify(u));
 				window.dispatchEvent(new Event('profile-updated'));
 			}
-
-			toast.success('Фото профиля обновлено!', { id: loadingToast });
+			toast.success('Фото обновлено!', { id: t });
 		} catch (err: any) {
-			const msg = err.response?.data?.error || 'Ошибка при загрузке фото';
-			toast.error(msg, { id: loadingToast });
-			// Откатываем превью если ошибка
+			toast.error(err.response?.data?.error || 'Ошибка при загрузке', { id: t });
 			setAvatarUrl(null);
 		} finally {
 			setIsUploadingAvatar(false);
-			// Сбрасываем input чтобы можно было выбрать тот же файл снова
 			if (fileInputRef.current) fileInputRef.current.value = '';
 		}
 	};
 
-	const handleProfileSubmit = async (e: React.FormEvent) => {
+	const handleSaveProfile = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setIsSavingProfile(true);
 		try {
-			const res = await api.post('profile/update/', {
-				first_name: firstName,
-				last_name: lastName,
-			});
-			// Обновляем localStorage
+			const res = await api.post('profile/update/', { first_name: firstName, last_name: lastName, email });
 			const userStr = localStorage.getItem('user');
-			if (userStr) {
-				const user = JSON.parse(userStr);
-				user.first_name = res.data.first_name;
-				user.last_name = res.data.last_name;
-				localStorage.setItem('user', JSON.stringify(user));
+			if (userStr && userStr !== 'undefined') {
+				const u = JSON.parse(userStr);
+				u.first_name = res.data.first_name;
+				u.last_name = res.data.last_name;
+				u.email = res.data.email;
+				localStorage.setItem('user', JSON.stringify(u));
+				window.dispatchEvent(new Event('profile-updated'));
 			}
-			toast.success('Профиль успешно сохранён!');
-		} catch {
-			toast.error('Ошибка при сохранении профиля');
-		} finally {
-			setIsSavingProfile(false);
-		}
+			toast.success('Профиль сохранён!');
+		} catch { toast.error('Ошибка при сохранении'); }
+		finally { setIsSavingProfile(false); }
 	};
 
-	const handlePasswordChange = async (e: React.FormEvent) => {
+	const handleChangePassword = async (e: React.FormEvent) => {
 		e.preventDefault();
-		
-		if (!newPassword || !confirmPassword) {
-			toast.error('Пожалуйста, заполните все поля');
-			return;
-		}
-		
-		if (newPassword !== confirmPassword) {
-			toast.error('Новые пароли не совпадают');
-			return;
-		}
-
-		if (newPassword.length < 6) {
-			toast.error('Новый пароль должен содержать минимум 6 символов');
-			return;
-		}
-
+		if (!oldPassword || !newPassword1 || !newPassword2) { toast.error('Заполните все поля'); return; }
+		if (newPassword1 !== newPassword2) { toast.error('Пароли не совпадают'); return; }
+		if (newPassword1.length < 6) { toast.error('Минимум 6 символов'); return; }
+		setIsChangingPassword(true);
 		try {
-			setIsSubmitting(true);
-			await api.post('/profile/change-password/', {
-				new_password: newPassword
-			});
-			toast.success('Пароль успешно обновлен!');
-			setNewPassword('');
-			setConfirmPassword('');
-		} catch (error: any) {
-			const errorMsg = error.response?.data?.error || 'Произошла ошибка при смене пароля';
-			toast.error(errorMsg);
-		} finally {
-			setIsSubmitting(false);
-		}
+			await api.post('profile/change-password/', { old_password: oldPassword, new_password: newPassword1 });
+			toast.success('Пароль обновлён!');
+			setOldPassword(''); setNewPassword1(''); setNewPassword2('');
+		} catch (err: any) { toast.error(err.response?.data?.error || 'Ошибка смены пароля'); }
+		finally { setIsChangingPassword(false); }
 	};
 
-	const initials = (firstName.charAt(0) || '?').toUpperCase();
+	const initials = (firstName.charAt(0) || username.charAt(0) || '?').toUpperCase();
 
 	return (
-		<div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4">
+		<div className="container">
+			<div className="main-content">
 
-			<div>
-				<h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-					<UserCircle className="text-primary" size={32} strokeWidth={2.5} />
-					Мой профиль
-				</h1>
-				<p className="text-sm font-bold text-slate-400 mt-1">Управление личными данными</p>
-			</div>
+				<h2 className="profile-page-title">Мой профиль</h2>
 
-			<Card>
-				<form onSubmit={handleProfileSubmit} className="space-y-6">
+				<div className="profile-grid">
 
-					{/* Аватарка */}
-					<div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-slate-100">
-						{/* Скрытый input для файла */}
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept="image/jpeg,image/png,image/gif,image/webp"
-							className="hidden"
-							onChange={handleFileChange}
-						/>
-
-						{/* Кликабельный аватар */}
-						<div
-							className="relative group cursor-pointer shrink-0"
-							onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
-							title="Нажмите чтобы изменить фото"
-						>
-							<div className="w-28 h-28 rounded-full overflow-hidden bg-gradient-eco text-white flex items-center justify-center text-4xl font-black shadow-lg">
+					<div className="filters-card">
+						<form onSubmit={handleSaveProfile} encType="multipart/form-data">
+							<div className="profile-avatar-new">
 								{avatarUrl ? (
-									<img
-										src={avatarUrl}
-										alt="Аватар"
-										className="w-full h-full object-cover"
-										onError={() => setAvatarUrl(null)}
-									/>
+									<img src={avatarUrl} alt="Аватар" className="current-avatar-new" />
 								) : (
-									initials
+									<div
+										className="current-avatar-new"
+										style={{
+											display: 'flex', alignItems: 'center', justifyContent: 'center',
+											background: 'linear-gradient(135deg,#ec4899,#0088cc)', color: 'white',
+											fontSize: 64, fontWeight: 700,
+										}}
+									>{initials}</div>
 								)}
-							</div>
-							{/* Затемнение при наведении */}
-							<div className="absolute inset-0 bg-slate-900/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-								{isUploadingAvatar
-									? <Loader2 className="text-white animate-spin" size={24} />
-									: <Camera className="text-white" size={24} />
-								}
-							</div>
-						</div>
-
-						<div className="text-center sm:text-left">
-							<h3 className="text-lg font-black text-slate-800">Фото профиля</h3>
-							<p className="text-sm font-bold text-slate-400 mb-3">PNG, JPG или GIF до 5 MB</p>
-							<Button
-								type="button"
-								variant="outline"
-								className="py-2 px-4 text-xs"
-								onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
-								disabled={isUploadingAvatar}
-							>
-								{isUploadingAvatar ? 'Загружаю...' : 'Изменить фото'}
-							</Button>
-						</div>
-					</div>
-
-					{/* Поля формы */}
-					<div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-						<div>
-							<Label>Имя</Label>
-							<Input
-								value={firstName}
-								onChange={e => setFirstName(e.target.value)}
-								placeholder="Ваше имя"
-							/>
-						</div>
-						<div>
-							<Label>Фамилия</Label>
-							<Input
-								value={lastName}
-								onChange={e => setLastName(e.target.value)}
-								placeholder="Ваша фамилия"
-							/>
-						</div>
-					</div>
-
-					<div className="pt-4 flex justify-end">
-						<Button type="submit" icon={<Save size={18} />} disabled={isSavingProfile}>
-							{isSavingProfile ? 'Сохранение...' : 'Сохранить данные'}
-						</Button>
-					</div>
-
-				</form>
-			</Card>
-
-			{/* Смена пароля */}
-			<div className="pt-4">
-				<h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-3 mb-4 pl-1">
-					<KeyRound className="text-primary" size={24} />
-					Безопасность
-				</h2>
-				<Card>
-					<form onSubmit={handlePasswordChange} className="space-y-5">
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl">
-							<div>
-								<Label>Новый пароль</Label>
-								<Input
-									type="password"
-									value={newPassword}
-									onChange={e => setNewPassword(e.target.value)}
-									placeholder="Минимум 6 символов"
+								<label htmlFor="id_avatar" className="change-photo-btn">
+									{isUploadingAvatar ? 'Загрузка...' : 'Изменить фото'}
+								</label>
+								<input
+									ref={fileInputRef}
+									type="file"
+									id="id_avatar"
+									accept="image/jpeg,image/png,image/gif,image/webp"
+									onChange={handleFileChange}
 								/>
 							</div>
-							<div>
-								<Label>Подтверждение пароля</Label>
-								<Input
-									type="password"
-									value={confirmPassword}
-									onChange={e => setConfirmPassword(e.target.value)}
-									placeholder="Повторите новый пароль"
-								/>
+
+							<div className="form-group">
+								<label>Имя</label>
+								<input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} />
 							</div>
-						</div>
+							<div className="form-group">
+								<label>Фамилия</label>
+								<input type="text" value={lastName} onChange={e => setLastName(e.target.value)} />
+							</div>
+							<div className="form-group">
+								<label>Логин</label>
+								<input type="text" value={username} disabled />
+							</div>
+							<div className="form-group">
+								<label>Email</label>
+								<input type="email" value={email} onChange={e => setEmail(e.target.value)} />
+							</div>
 
-						<div className="pt-4 flex">
-							<Button type="submit" disabled={isSubmitting} variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50" icon={<ShieldCheck size={18} />}>
-								{isSubmitting ? 'Обновление...' : 'Обновить пароль'}
-							</Button>
-						</div>
+							<button type="submit" className="btn btn-save-profile" disabled={isSavingProfile}>
+								{isSavingProfile ? 'Сохранение...' : 'Сохранить данные'}
+							</button>
+						</form>
+					</div>
 
-					</form>
-				</Card>
+					<div className="filters-card password-form-card">
+						<h3>Сменить пароль</h3>
+						<form onSubmit={handleChangePassword}>
+							<div className="form-group">
+								<label>Старый пароль*</label>
+								<input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} />
+							</div>
+							<div className="form-group">
+								<label>Новый пароль*</label>
+								<input type="password" value={newPassword1} onChange={e => setNewPassword1(e.target.value)} />
+								<div className="help-text">Минимум 6 символов.</div>
+							</div>
+							<div className="form-group">
+								<label>Подтверждение нового пароля*</label>
+								<input type="password" value={newPassword2} onChange={e => setNewPassword2(e.target.value)} />
+							</div>
+
+							<button type="submit" className="btn btn-danger" disabled={isChangingPassword}>
+								{isChangingPassword ? 'Смена...' : 'Изменить пароль'}
+							</button>
+						</form>
+					</div>
+
+				</div>
 			</div>
 		</div>
 	);

@@ -266,13 +266,13 @@ def system_state_view(request):
     return Response({'last_updated': last_updated})
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])  # 🔥 ИСПРАВЛЕНО: Защита эндпоинта ИИ
+@permission_classes([IsAuthenticated])
 def chat_with_ai(request):
     question = request.data.get('message', '')
     if not question:
         return Response({'error': 'Пустой вопрос'}, status=400)
-    # answer = ask_gemini(question)
-    answer = "AI временно недоступен из-за проблем с зависимостями."
+    from .ai_service import ask_gemini
+    answer = ask_gemini(question)
     return Response({'answer': answer})
 
 
@@ -496,6 +496,36 @@ class CompanySettingsAPIView(APIView):
         return Response(serializer.errors, status=400)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def test_telegram_message(request):
+    """Отправляет тестовое сообщение в настроенный Telegram чат для проверки связки."""
+    import requests
+    from .models import TelegramSettings
+
+    settings_obj = TelegramSettings.objects.first()
+    if not settings_obj or not settings_obj.bot_token or not settings_obj.chat_id:
+        return Response(
+            {'ok': False, 'error': 'Не указан Token бота или Chat ID. Сначала сохрани настройки.'},
+            status=400
+        )
+
+    url = f"https://api.telegram.org/bot{settings_obj.bot_token}/sendMessage"
+    payload = {
+        'chat_id': settings_obj.chat_id,
+        'text': '✅ <b>Тест EcoPrint CRM</b>\nИнтеграция с Telegram работает корректно!',
+        'parse_mode': 'HTML',
+    }
+
+    try:
+        r = requests.post(url, data=payload, timeout=10)
+        if r.status_code == 200:
+            return Response({'ok': True, 'message': 'Тестовое сообщение отправлено!'})
+        return Response({'ok': False, 'error': f'Telegram API: {r.text}'}, status=400)
+    except Exception as e:
+        return Response({'ok': False, 'error': f'Ошибка сети: {e}'}, status=500)
+
+
 class TelegramSettingsAPIView(APIView):
     permission_classes = [IsSuperAdmin] # 🔥 Доступ к Telegram настройкам только у админа
     
@@ -520,10 +550,10 @@ def header_stats(request):
     today = timezone.now().date()
     tomorrow = today + timedelta(days=1)
 
-    # Ищем только активные товары (заказ не выдан, не в архиве, товар НЕ готов)
+    # Ищем активные товары (заказ не в архиве, товар НЕ готов).
+    # is_received не фильтруем: если товар не готов и срок прошёл — это всё равно просрочка.
     active_items = Item.objects.filter(
-        order__is_archived=False, 
-        order__is_received=False
+        order__is_archived=False
     ).exclude(status='ready')
     
     # 🔥 ОПТИМИЗАЦИЯ: Агрегируем 3 разных count() в ОДИН запрос для ускорения ответа из облака

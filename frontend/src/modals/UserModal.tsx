@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Save, UserCircle } from 'lucide-react';
-import BaseModal from '../components/ui/BaseModal';
-import Button from '../components/ui/Button';
-import { Input, Label } from '../components/ui/Form';
+// src/modals/UserModal.tsx — стиль legacy .modal
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
+import React, { useEffect, useState } from 'react';
 
 interface UserModalProps {
 	isOpen: boolean;
@@ -20,6 +18,7 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 	const [password, setPassword] = useState('');
 
 	useEffect(() => {
+		if (!isOpen) return;
 		if (initialData) {
 			setUsername(initialData.username || '');
 			setFirstName(initialData.first_name || '');
@@ -28,93 +27,89 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 			setRole(initialData.role || 'worker');
 			setPassword('');
 		} else {
-			setUsername('');
-			setFirstName('');
-			setLastName('');
-			setEmail('');
-			setRole('worker');
-			setPassword('');
+			setUsername(''); setFirstName(''); setLastName('');
+			setEmail(''); setRole('worker'); setPassword('');
 		}
 	}, [initialData, isOpen]);
+
+	if (!isOpen) return null;
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 		const data: any = { username, first_name: firstName, last_name: lastName, email, role };
-		if (password) {
-			data.password = password;
-		}
+		if (password) data.password = password;
 		onSave(data);
 	};
 
 	return (
-		<BaseModal
-			isOpen={isOpen}
-			onClose={onClose}
-			title={initialData ? 'Редактировать сотрудника' : 'Новый сотрудник'}
-			maxWidth="max-w-md"
-		>
-			<form onSubmit={handleSubmit} className="space-y-5">
-
-				<div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-4">
-					<div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-sm">
-						<UserCircle size={24} />
-					</div>
-					<div>
-						<p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Учетная запись</p>
-						<p className="text-sm font-black text-slate-700">Данные для входа в систему</p>
+		<div className="modal active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+			<div className="modal-content" style={{ maxWidth: 600 }}>
+				<div className="modal-header">
+					<div className="modal-header-content">
+						<div>
+							<h2>{initialData ? 'Редактировать сотрудника' : 'Новый сотрудник'}</h2>
+							<div className="modal-header-subtitle">Учётная запись и доступ</div>
+						</div>
+						<button className="close-btn" type="button" onClick={onClose}>&times;</button>
 					</div>
 				</div>
 
-				<div>
-					<Label>Логин (Username) *</Label>
-					<Input value={username} onChange={e => setUsername(e.target.value)} required placeholder="Например: ivan_manager" />
+				<div className="modal-body">
+					<form onSubmit={handleSubmit}>
+						<div className="form-section">
+							<div className="form-group">
+								<label>Логин (Username) *</label>
+								<input type="text" required value={username} onChange={e => setUsername(e.target.value)} placeholder="Например: ivan_manager" />
+							</div>
+							<div className="form-group">
+								<label>{initialData ? 'Новый пароль' : 'Пароль'}</label>
+								<input
+									type="password"
+									value={password}
+									onChange={e => setPassword(e.target.value)}
+									placeholder={initialData ? 'Оставьте пустым, если не хотите менять' : 'Если пусто, пароль будет 123456'}
+								/>
+							</div>
+							<div className="form-grid-2">
+								<div className="form-group">
+									<label>Имя</label>
+									<input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Иван" />
+								</div>
+								<div className="form-group">
+									<label>Фамилия</label>
+									<input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Иванов" />
+								</div>
+							</div>
+							<div className="form-group">
+								<label>Email</label>
+								<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ivan@ecoprint.tj" />
+							</div>
+							<div className="form-group">
+								<label>Роль в системе *</label>
+								<div className="custom-select">
+									<select value={role} onChange={e => setRole(e.target.value)} required>
+										<option value="worker">Работник (Только Главная)</option>
+										<option value="manager">Менеджер (Главная, Товары, Архив)</option>
+										<option value="superadmin">Супер Админ (Полный доступ)</option>
+									</select>
+								</div>
+							</div>
+						</div>
+					</form>
 				</div>
 
-				<div>
-					<Label>{initialData ? 'Новый пароль' : 'Пароль'}</Label>
-					<Input
-						type="password"
-						value={password}
-						onChange={e => setPassword(e.target.value)}
-						placeholder={initialData ? "Оставьте пустым, если не хотите менять" : "Если пусто, пароль будет 123456"}
-					/>
-				</div>
-
-				<div className="grid grid-cols-2 gap-4">
-					<div>
-						<Label>Имя</Label>
-						<Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Иван" />
+				<div className="modal-footer">
+					<div className="order-summary"></div>
+					<div className="form-actions">
+						<button type="button" className="btn-cancel" onClick={onClose}>
+							<i className="fas fa-times"></i>Отмена
+						</button>
+						<button type="button" className="btn-save" onClick={handleSubmit as any}>
+							<i className="fas fa-save"></i>Сохранить
+						</button>
 					</div>
-					<div>
-						<Label>Фамилия</Label>
-						<Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Иванов" />
-					</div>
 				</div>
-
-				<div>
-					<Label>Email</Label>
-					<Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ivan@ecoprint.tj" />
-				</div>
-
-				<div>
-					<Label>Роль в системе *</Label>
-					<select
-						value={role}
-						onChange={(e) => setRole(e.target.value)}
-						className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
-						required
-					>
-						<option value="worker">Работник (Только Главная)</option>
-						<option value="manager">Менеджер (Главная, Товары, Архив)</option>
-						<option value="superadmin">Супер Админ (Полный доступ)</option>
-					</select>
-				</div>
-
-				<div className="pt-4 flex gap-3">
-					<Button type="button" variant="ghost" onClick={onClose} className="w-full">Отмена</Button>
-					<Button type="submit" variant="primary" icon={<Save size={18} />} className="w-full">Сохранить</Button>
-				</div>
-			</form>
-		</BaseModal>
+			</div>
+		</div>
 	);
 }

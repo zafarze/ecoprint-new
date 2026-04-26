@@ -1,28 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AIChatWidget from './AIChatWidget';
+import LegacyNotification from './LegacyNotification';
+import PWAUpdatePrompt from './PWAUpdatePrompt';
 
 export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+	const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+		return localStorage.getItem('sidebar_collapsed') === '1';
+	});
 
-	// 🔥 МГНОВЕННАЯ СИНХРОНИЗАЦИЯ через Firebase Realtime Database
-	// + Резервный polling каждые 5 сек + visibilitychange/focus для надёжности
+	// Класс на <body> — legacy CSS строит на нём схлопнутое состояние
+	useEffect(() => {
+		document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+		localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+	}, [isCollapsed]);
+
+	// Класс на body для затемнения фона при открытом мобильном сайдбаре
+	useEffect(() => {
+		document.body.classList.toggle('sidebar-mobile-open', isMobileMenuOpen);
+		// Блокируем скролл страницы при открытом меню
+		document.body.style.overflow = isMobileMenuOpen ? 'hidden' : '';
+		return () => { document.body.style.overflow = ''; };
+	}, [isMobileMenuOpen]);
+
+	// 🔥 Синхронизация (Firebase + polling + visibility/focus)
 	useEffect(() => {
 		const dispatch = () => window.dispatchEvent(new Event('sync-updated'));
 
-		// Резервные методы (всегда активны)
 		let timerId: ReturnType<typeof setTimeout>;
-		const loop = () => { dispatch(); timerId = setTimeout(loop, 5000); };
-		timerId = setTimeout(loop, 5000);
+		const loop = () => { dispatch(); timerId = setTimeout(loop, 3000); };
+		timerId = setTimeout(loop, 3000);
 
 		const onVisible = () => { if (document.visibilityState === 'visible') dispatch(); };
 		document.addEventListener('visibilitychange', onVisible);
 		window.addEventListener('focus', onVisible);
 
-		// === МЕТОД 1: Firebase RTDB Push (МГНОВЕННЫЙ < 1 сек) ===
-		// Async import чтобы не блокировать рендер
 		let unsubscribeFirebase: (() => void) | null = null;
 		(async () => {
 			try {
@@ -41,29 +56,37 @@ export default function Layout() {
 		};
 	}, []);
 
-
 	return (
-		<div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">
-			{/* Сайдбар */}
+		<>
 			<Sidebar
 				isOpen={isMobileMenuOpen}
 				onClose={() => setIsMobileMenuOpen(false)}
+				isCollapsed={isCollapsed}
+				onToggleCollapse={() => setIsCollapsed(v => !v)}
 			/>
 
-			{/* Основная часть (Шапка + Контент) */}
-			<div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-				<Header onMenuClick={() => setIsMobileMenuOpen(true)} />
+			{/* Затемнение фона на мобиле при открытом сайдбаре — клик закрывает */}
+			{isMobileMenuOpen && (
+				<div
+					className="sidebar-backdrop"
+					onClick={() => setIsMobileMenuOpen(false)}
+					style={{
+						position: 'fixed',
+						inset: 0,
+						background: 'rgba(0,0,0,0.5)',
+						zIndex: 999,
+					}}
+				/>
+			)}
 
-				{/* Область для скролла страниц */}
-				<main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
-					<div className="max-w-7xl mx-auto">
-						<Outlet />
-					</div>
-				</main>
+			<div className="page-container">
+				<Header onMenuClick={() => setIsMobileMenuOpen(true)} />
+				<Outlet />
 			</div>
 
-			{/* 2. ДОБАВЛЯЕМ ЧАТ СЮДА (он будет висеть поверх всего) */}
 			<AIChatWidget />
-		</div>
+			<LegacyNotification />
+			<PWAUpdatePrompt />
+		</>
 	);
 }
