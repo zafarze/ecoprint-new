@@ -117,19 +117,21 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 								</div>
 							</div>
 
-							<div className="form-group">
-								<label htmlFor="clientName">Имя клиента *</label>
-								<input
-									type="text" id="clientName" placeholder="Введите имя клиента"
-									required value={client} onChange={e => setClient(e.target.value)}
-								/>
-							</div>
-							<div className="form-group">
-								<label htmlFor="clientPhone">Телефон</label>
-								<input
-									type="tel" id="clientPhone" placeholder="+992 00 000 0000"
-									value={clientPhone} onChange={e => setClientPhone(e.target.value)}
-								/>
+							<div className="form-grid-2">
+								<div className="form-group">
+									<label htmlFor="clientName">Имя клиента *</label>
+									<input
+										type="text" id="clientName" placeholder="Введите имя клиента"
+										required value={client} onChange={e => setClient(e.target.value)}
+									/>
+								</div>
+								<div className="form-group">
+									<label htmlFor="clientPhone">Телефон</label>
+									<input
+										type="tel" id="clientPhone" placeholder="+992 00 000 0000"
+										value={clientPhone} onChange={e => setClientPhone(e.target.value)}
+									/>
+								</div>
 							</div>
 						</div>
 
