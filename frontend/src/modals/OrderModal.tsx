@@ -275,9 +275,9 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 				</div>
 
 				{/* История изменений */}
-				<div className="history-section" style={{ marginTop: 10, borderTop: '1px solid #eee', padding: '15px 20px' }}>
+				<div className="history-section" style={{ borderTop: '1px solid #eee', padding: '8px 18px' }}>
 					<h4
-						style={{ fontSize: '0.9rem', color: '#666', marginBottom: 10, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+						style={{ fontSize: '0.8rem', color: '#666', margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', fontWeight: 500 }}
 						onClick={() => setIsHistoryOpen(v => !v)}
 					>
 						<i className="fas fa-history" style={{ marginRight: 8 }}></i> История изменений

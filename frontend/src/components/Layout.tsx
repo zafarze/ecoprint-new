@@ -5,6 +5,7 @@ import Header from './Header';
 import AIChatWidget from './AIChatWidget';
 import LegacyNotification from './LegacyNotification';
 import PWAUpdatePrompt from './PWAUpdatePrompt';
+import { subscribeToSync } from '../firebase';
 
 export default function Layout() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -38,18 +39,10 @@ export default function Layout() {
 		document.addEventListener('visibilitychange', onVisible);
 		window.addEventListener('focus', onVisible);
 
-		let unsubscribeFirebase: (() => void) | null = null;
-		(async () => {
-			try {
-				const { subscribeToSync } = await import('../firebase');
-				unsubscribeFirebase = subscribeToSync(dispatch);
-			} catch {
-				// Firebase недоступен — polling продолжит работу
-			}
-		})();
+		const unsubscribeFirebase = subscribeToSync(dispatch);
 
 		return () => {
-			unsubscribeFirebase?.();
+			unsubscribeFirebase();
 			clearTimeout(timerId);
 			document.removeEventListener('visibilitychange', onVisible);
 			window.removeEventListener('focus', onVisible);

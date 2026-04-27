@@ -8,6 +8,7 @@ import OrderModal from '../modals/OrderModal';
 import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 import { playIfEnabled } from '../utils/sound';
 import { showNotification, isPopupEnabled } from '../utils/notification';
+import { notifyAllClients, subscribeToSync } from '../firebase';
 
 const STATUS_TEXT: Record<string, string> = {
 	'ready': 'Готов',
@@ -38,6 +39,16 @@ const getDaysUntilDeadline = (deadline?: string) => {
 type SortField = 'id' | 'client' | 'status' | 'default';
 type SortDir = 'asc' | 'desc';
 
+const deriveOrderStatus = (items: any[] | undefined): string => {
+	if (!items || items.length === 0) return 'not-ready';
+	if (items.every((i: any) => i.status === 'ready')) return 'ready';
+	if (items.every((i: any) => i.status === 'not-ready')) return 'not-ready';
+	return 'in-progress';
+};
+
+const normalizeOrders = (data: any[]): any[] =>
+	data.map((o: any) => ({ ...o, status: deriveOrderStatus(o.items) }));
+
 export default function OrdersPage() {
 	const userStr = localStorage.getItem('user');
 	const user = userStr && userStr !== 'undefined' ? JSON.parse(userStr) : null;
@@ -63,6 +74,7 @@ export default function OrdersPage() {
 	const [orderToDelete, setOrderToDelete] = useState<any>(null);
 
 	const pendingItemIds = useRef<Set<number>>(new Set());
+	const stablePositionRef = useRef<Map<number, number>>(new Map());
 	const fetchOrdersSilentlyRef = useRef<() => Promise<void>>(() => Promise.resolve());
 	const isModalOpenRef = useRef(false);
 
@@ -125,9 +137,7 @@ export default function OrdersPage() {
 	const notifyHeader = () => window.dispatchEvent(new Event('orders-updated'));
 
 	// Уведомить все браузеры об изменении (Firebase RTDB push, < 1 сек)
-	const broadcastChange = () => {
-		import('../firebase').then(({ notifyAllClients }) => notifyAllClients()).catch(() => { });
-	};
+	const broadcastChange = () => { notifyAllClients(); };
 
 	const fetchProducts = async () => {
 		try {
@@ -146,16 +156,17 @@ export default function OrdersPage() {
 					prev.forEach(o => o.items?.forEach((i: any) => {
 						if (pendingItemIds.current.has(i.id)) pendingMap.set(i.id, i.status);
 					}));
-					const merged = data.map((o: any) => ({
+					const merged = normalizeOrders(data.map((o: any) => ({
 						...o,
 						items: o.items?.map((i: any) => pendingMap.has(i.id) ? { ...i, status: pendingMap.get(i.id) } : i),
-					}));
+					})));
 					localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
 					return merged;
 				});
 			} else {
-				localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-				setOrders(data);
+				const normalized = normalizeOrders(data);
+				localStorage.setItem(CACHE_KEY, JSON.stringify(normalized));
+				setOrders(normalized);
 			}
 		} catch (err) { console.error('Ошибка при загрузке заказов:', err); }
 	};
@@ -176,13 +187,7 @@ export default function OrdersPage() {
 
 		const doFetch = () => { if (!isModalOpenRef.current) fetchOrdersSilentlyRef.current(); };
 
-		let unsubscribeFb: (() => void) | null = null;
-		(async () => {
-			try {
-				const { subscribeToSync } = await import('../firebase');
-				unsubscribeFb = subscribeToSync(doFetch);
-			} catch { /* ok */ }
-		})();
+		const unsubscribeFb = subscribeToSync(doFetch);
 
 		let timerId: ReturnType<typeof setTimeout>;
 		const poll = () => { doFetch(); timerId = setTimeout(poll, 3000); };
@@ -388,15 +393,31 @@ export default function OrdersPage() {
 				return 0;
 			});
 		} else {
-			res.sort((a, b) => {
-				const readyA = a.status === 'ready', readyB = b.status === 'ready';
-				if (readyA && !readyB) return 1;
-				if (!readyA && readyB) return -1;
-				const dA = earliestDeadline(a), dB = earliestDeadline(b);
-				if (dA !== dB) return dA - dB;
-				const w: Record<string, number> = { 'in-progress': 1, 'not-ready': 2, 'ready': 3 };
-				return (w[a.status] || 99) - (w[b.status] || 99);
-			});
+			// Стабильная позиция: при смене статуса карточка не прыгает.
+			// Полная пересортировка только когда множество ID видимых заказов изменилось
+			// (добавили/удалили/архивировали или сменились фильтры).
+			const positions = stablePositionRef.current;
+			const currentIds = res.map(o => o.id);
+			const knownIds = [...positions.keys()];
+			const sameSet = currentIds.length === knownIds.length &&
+				currentIds.every(id => positions.has(id));
+
+			if (!sameSet) {
+				res.sort((a, b) => {
+					const readyA = a.status === 'ready', readyB = b.status === 'ready';
+					if (readyA && !readyB) return 1;
+					if (!readyA && readyB) return -1;
+					const dA = earliestDeadline(a), dB = earliestDeadline(b);
+					if (dA !== dB) return dA - dB;
+					const w: Record<string, number> = { 'in-progress': 1, 'not-ready': 2, 'ready': 3 };
+					return (w[a.status] || 99) - (w[b.status] || 99);
+				});
+				const next = new Map<number, number>();
+				res.forEach((o, i) => next.set(o.id, i));
+				stablePositionRef.current = next;
+			} else {
+				res.sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
+			}
 		}
 		return res;
 	}, [orders, searchQuery, activeStatuses, activeProducts, deadlineFilter, sort]);

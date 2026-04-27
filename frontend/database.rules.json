@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "ecoprint": {
+      "sync": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

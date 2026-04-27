@@ -327,76 +327,147 @@ body {
   width: 100%;
   display: block;
   box-sizing: border-box;
-  padding: 18px 22px;
+  padding: 6px 28px 8px;
 }
 
+/* Секция: заголовок с inline-иконкой (как на эскизе 1) */
 .modal .modal-content .form-section-header {
   display: flex !important;
   flex-direction: row !important;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .modal .modal-content .form-section-icon {
-  width: 40px;
-  height: 40px;
-  font-size: 16px;
+  width: auto !important;
+  height: auto !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #6366f1 !important;
+  font-size: 17px !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
 }
 
 .modal .modal-content .form-section-title {
-  font-size: 17px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: #475569;
   line-height: 1.2;
 }
 
 .modal .modal-content .form-section-subtitle {
-  font-size: 12px;
-  margin-top: 0;
+  display: none;
 }
 
 .modal .modal-content .form-group {
-  margin-bottom: 12px;
+  margin-bottom: 0;
+}
+
+.modal .modal-content .form-group label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #64748b;
 }
 
 .modal .modal-content .form-group input,
 .modal .modal-content .form-group select,
 .modal .modal-content .form-group textarea {
-  padding: 10px 14px;
+  padding: 13px 16px;
   font-size: 14px;
+  border-radius: 12px;
 }
 
+.modal .modal-content .form-group textarea {
+  min-height: 72px;
+}
+
+/* Шапка модалки — белая, без градиента и пульсации (как на эскизе 1) */
 .modal .modal-content .modal-header {
-  padding: 18px 24px;
+  padding: 14px 28px 12px;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal .modal-content .modal-header::before {
+  display: none !important;
 }
 
 .modal .modal-content .modal-header h2 {
   font-size: 22px;
+  color: #0f172a;
+  margin-bottom: 4px;
 }
 
 .modal .modal-content .modal-header-subtitle {
   font-size: 13px;
   margin-top: 2px;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+.modal .modal-content .close-btn {
+  background: transparent !important;
+  color: #94a3b8 !important;
+  width: 36px;
+  height: 36px;
+  font-size: 24px;
+  backdrop-filter: none !important;
+}
+
+.modal .modal-content .close-btn:hover {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  transform: none !important;
 }
 
 .modal .modal-content .item-form-card {
-  padding: 16px 18px;
+  padding: 18px 20px;
+  border-radius: 14px;
 }
 
 .modal .modal-content .item-form-header {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.modal .modal-content .item-number-badge {
+  padding: 7px 16px;
+  font-size: 13px;
+}
+
+.modal .modal-content .product-type-section {
+  margin-bottom: 14px;
+}
+
+.modal .modal-content .product-type-label {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #64748b;
 }
 
 .modal .modal-content .add-item-section {
-  padding: 12px 22px;
+  padding: 14px 28px 20px;
 }
 
 .modal .modal-content .add-item-btn {
-  padding: 10px 16px;
+  padding: 12px 18px;
   font-size: 14px;
 }
 
 .modal .modal-content .modal-footer {
-  padding: 14px 22px;
+  padding: 16px 24px;
 }
 
 /* Тип продукции: input занимает всё свободное пространство, кнопка — по содержимому.
@@ -404,7 +475,7 @@ body {
 .modal .modal-content .product-input-group {
   display: grid !important;
   grid-template-columns: 1fr auto !important;
-  gap: 10px;
+  gap: 8px;
   align-items: stretch;
   width: 100%;
 }
@@ -412,10 +483,10 @@ body {
 .modal .modal-content .product-input-group .product-name-input {
   width: 100% !important;
   min-width: 0 !important;
-  padding: 12px 16px !important;
-  font-size: 14px;
+  padding: 8px 12px !important;
+  font-size: 13px;
   border: 2px solid #e1e8ed;
-  border-radius: 12px;
+  border-radius: 10px;
   box-sizing: border-box;
 }
 
@@ -428,8 +499,9 @@ body {
 .modal .modal-content .product-input-group .product-type-btn {
   white-space: nowrap !important;
   width: auto !important;
-  padding: 12px 18px !important;
-  font-size: 14px;
+  padding: 8px 14px !important;
+  font-size: 13px;
+  border-radius: 10px;
 }
 
 .modal .modal-content .form-section-header > div:last-child {
@@ -440,14 +512,14 @@ body {
 .modal .modal-content .form-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 18px;
   width: 100%;
 }
 
 .modal .modal-content .item-form-grid-3 {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 20px;
+  gap: 18px;
   width: 100%;
 }
 
