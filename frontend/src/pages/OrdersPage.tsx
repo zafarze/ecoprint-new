@@ -8,7 +8,7 @@ import OrderModal from '../modals/OrderModal';
 import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 import { playIfEnabled } from '../utils/sound';
 import { showNotification, isPopupEnabled } from '../utils/notification';
-import { notifyAllClients, subscribeToSync } from '../firebase';
+import { notifyAllClients, subscribeToSync, type SyncPayload, type SyncPayloadInput } from '../firebase';
 
 const STATUS_TEXT: Record<string, string> = {
 	'ready': 'Готов',
@@ -139,8 +139,40 @@ export default function OrdersPage() {
 
 	const notifyHeader = () => window.dispatchEvent(new Event('orders-updated'));
 
-	// Уведомить все браузеры об изменении (Firebase RTDB push, < 1 сек)
-	const broadcastChange = () => { notifyAllClients(); };
+	// Уведомить все браузеры об изменении. Payload (опц.) позволяет другим
+	// клиентам применить patch локально БЕЗ GET-запроса — это даёт мгновенный
+	// real-time даже при холодном старте бэкенда.
+	const broadcastChange = (payload?: SyncPayloadInput) => { notifyAllClients(payload); };
+
+	// Применить входящий sync-payload к локальному состоянию заказов.
+	// Возвращает true, если изменение применено — тогда refetch не нужен.
+	const applySyncPatch = (payload: SyncPayload | null): boolean => {
+		if (!payload || payload.type === 'orders-changed') return false;
+		if (payload.type === 'item-status') {
+			setOrders(prev => {
+				const next = prev.map(o => {
+					if (o.id !== payload.orderId) return o;
+					const items = o.items?.map((i: any) => i.id === payload.itemId ? { ...i, status: payload.status } : i) || [];
+					const allReady = items.length > 0 && items.every((i: any) => i.status === 'ready');
+					const allNot = items.length > 0 && items.every((i: any) => i.status === 'not-ready');
+					const orderStatus = payload.orderStatus || (allReady ? 'ready' : (allNot ? 'not-ready' : 'in-progress'));
+					return { ...o, items, status: orderStatus };
+				});
+				localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+				return next;
+			});
+			return true;
+		}
+		if (payload.type === 'order-received') {
+			setOrders(prev => {
+				const next = prev.map(o => o.id === payload.orderId ? { ...o, is_received: payload.is_received } : o);
+				localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+				return next;
+			});
+			return true;
+		}
+		return false;
+	};
 
 	const fetchProducts = async () => {
 		try {
@@ -191,7 +223,9 @@ export default function OrdersPage() {
 		else setIsLoading(true);
 		await fetchOrdersSilently();
 		setIsLoading(false);
-		api.post('orders/trigger_auto_archive/').catch(err => console.error('Авто-архивация:', err));
+		// trigger_auto_archive намеренно НЕ вызываем здесь: он выдавал 500/CORS
+		// и шумел в консоли каждому пользователю. Архивацию надо поднять как
+		// серверный cron, а не дёргать с фронта.
 	};
 
 	useEffect(() => {
@@ -200,7 +234,14 @@ export default function OrdersPage() {
 
 		const doFetch = () => { if (!isModalOpenRef.current) fetchOrdersSilentlyRef.current(); };
 
-		const unsubscribeFb = subscribeToSync(doFetch);
+		// Получаем структурированный payload — если можем применить patch
+		// локально, делаем это БЕЗ refetch (мгновенно, без зависимости от бэка).
+		// Если payload неизвестного типа или null — fallback на GET.
+		const onSync = (payload: SyncPayload | null) => {
+			if (isModalOpenRef.current) return;
+			if (!applySyncPatch(payload)) doFetch();
+		};
+		const unsubscribeFb = subscribeToSync(onSync);
 
 		// Polling — fallback на случай если все push-каналы не сработали.
 		// Когда вкладка видима — частим (1.5 сек), когда фоновая — реже (10 сек), чтобы
@@ -241,14 +282,14 @@ export default function OrdersPage() {
 		const newStatus = nextStatus[item.status];
 		if (!newStatus) return;
 
+		let newOrderStatus = 'in-progress';
 		const newOrders = orders.map(o => {
 			if (o.id !== orderId) return o;
 			const updatedItems = o.items.map((i: any) => i.id === item.id ? { ...i, status: newStatus } : i);
 			const allReady = updatedItems.every((i: any) => i.status === 'ready');
 			const allNot = updatedItems.every((i: any) => i.status === 'not-ready');
-			let s = 'in-progress';
-			if (allReady) s = 'ready'; else if (allNot) s = 'not-ready';
-			return { ...o, items: updatedItems, status: s };
+			if (allReady) newOrderStatus = 'ready'; else if (allNot) newOrderStatus = 'not-ready';
+			return { ...o, items: updatedItems, status: newOrderStatus };
 		});
 		setOrders(newOrders);
 		localStorage.setItem(CACHE_KEY, JSON.stringify(newOrders));
@@ -261,8 +302,7 @@ export default function OrdersPage() {
 
 		try {
 			await api.patch(`items/${item.id}/`, { status: newStatus });
-			broadcastChange();
-			fetchOrdersSilentlyRef.current();
+			broadcastChange({ type: 'item-status', orderId, itemId: item.id, status: newStatus, orderStatus: newOrderStatus });
 			notifyHeader();
 			// Снимаем защиту от перезаписи через 5 сек, чтобы успели вернуться
 			// все polling-запросы, отправленные до коммита PATCH (race с GET /orders/).
@@ -292,7 +332,7 @@ export default function OrdersPage() {
 		try {
 			await api.patch(`orders/${order.id}/`, { is_received: newVal });
 			toast.success(newVal ? 'Заказ выдан!' : 'Отметка о выдаче снята');
-			broadcastChange();
+			broadcastChange({ type: 'order-received', orderId: order.id, is_received: newVal });
 			notifyHeader();
 			// Снимаем защиту от перезаписи через 5 сек, чтобы успели вернуться
 			// все polling-запросы, отправленные до коммита PATCH (race с GET /orders/).
