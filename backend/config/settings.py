@@ -97,6 +97,13 @@ if os.environ.get('RUN_ON_CLOUD_RUN') == 'True':
             'PASSWORD': os.environ.get('DB_PASSWORD'),
             # Google Cloud SQL подключается через специальный сокет-путь
             'HOST': f"/cloudsql/{os.environ.get('CLOUD_SQL_CONNECTION_NAME')}",
+            # Persistent connection: переиспользуем коннект между запросами 10 минут.
+            # Критично для текущей конфигурации, где Cloud Run в europe-west3,
+            # а Cloud SQL в us-central1 — каждое новое подключение это ~500ms-1s
+            # на TLS handshake через Атлантику. С CONN_MAX_AGE ставим коннект один
+            # раз и переиспользуем — запросы летают в разы быстрее.
+            'CONN_MAX_AGE': 600,
+            'CONN_HEALTH_CHECKS': True,
         }
     }
 else:
