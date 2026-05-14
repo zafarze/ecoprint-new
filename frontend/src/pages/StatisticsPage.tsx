@@ -27,10 +27,19 @@ export default function StatisticsPage() {
 			const cacheKey = `cached_stats_${period}`;
 			const cached = localStorage.getItem(cacheKey);
 			if (cached) {
-				setStats(JSON.parse(cached));
-				setIsLoading(false);
+				// Точное попадание — показываем мгновенно.
+				try { setStats(JSON.parse(cached)); setIsLoading(false); } catch { /* битый кэш */ }
 			} else {
-				setIsLoading(true);
+				// Кэша для этого периода нет. Если есть кэш для ДРУГОГО периода —
+				// покажем его как заглушку, чтобы не зависало пустым во время cold-start Cloud Run.
+				// Спиннер ставим только когда показывать совсем нечего.
+				const fallbackKey = (['week', 'month', 'year'] as const).find(p => p !== period && localStorage.getItem(`cached_stats_${p}`));
+				if (fallbackKey) {
+					try { setStats(JSON.parse(localStorage.getItem(`cached_stats_${fallbackKey}`)!)); setIsLoading(false); }
+					catch { setIsLoading(true); }
+				} else {
+					setIsLoading(true);
+				}
 			}
 			try {
 				const res = await api.get(`statistics-data/?period=${period}`);
