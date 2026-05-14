@@ -75,6 +75,8 @@ export default function OrdersPage() {
 
 	const pendingItemIds = useRef<Set<number>>(new Set());
 	const pendingClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+	const pendingOrderReceived = useRef<Map<number, boolean>>(new Map());
+	const pendingOrderClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 	const stablePositionRef = useRef<Map<number, number>>(new Map());
 	const fetchOrdersSilentlyRef = useRef<() => Promise<void>>(() => Promise.resolve());
 	const isModalOpenRef = useRef(false);
@@ -151,16 +153,26 @@ export default function OrdersPage() {
 		try {
 			const res = await api.get('orders/?is_archived=false');
 			const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
-			if (pendingItemIds.current.size > 0) {
+			const hasPendingItems = pendingItemIds.current.size > 0;
+			const hasPendingOrders = pendingOrderReceived.current.size > 0;
+			if (hasPendingItems || hasPendingOrders) {
 				setOrders(prev => {
 					const pendingMap = new Map<number, string>();
-					prev.forEach(o => o.items?.forEach((i: any) => {
-						if (pendingItemIds.current.has(i.id)) pendingMap.set(i.id, i.status);
+					if (hasPendingItems) {
+						prev.forEach(o => o.items?.forEach((i: any) => {
+							if (pendingItemIds.current.has(i.id)) pendingMap.set(i.id, i.status);
+						}));
+					}
+					const merged = normalizeOrders(data.map((o: any) => {
+						const overlaidOrder = pendingOrderReceived.current.has(o.id)
+							? { ...o, is_received: pendingOrderReceived.current.get(o.id) }
+							: o;
+						return {
+							...overlaidOrder,
+							items: overlaidOrder.items?.map((i: any) =>
+								pendingMap.has(i.id) ? { ...i, status: pendingMap.get(i.id) } : i),
+						};
 					}));
-					const merged = normalizeOrders(data.map((o: any) => ({
-						...o,
-						items: o.items?.map((i: any) => pendingMap.has(i.id) ? { ...i, status: pendingMap.get(i.id) } : i),
-					})));
 					localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
 					return merged;
 				});
@@ -204,6 +216,8 @@ export default function OrdersPage() {
 			clearTimeout(timerId);
 			pendingClearTimers.current.forEach(t => clearTimeout(t));
 			pendingClearTimers.current.clear();
+			pendingOrderClearTimers.current.forEach(t => clearTimeout(t));
+			pendingOrderClearTimers.current.clear();
 			document.removeEventListener('visibilitychange', onVisible);
 			window.removeEventListener('focus', onVisible);
 			window.removeEventListener('sync-updated', doFetch);
@@ -261,12 +275,24 @@ export default function OrdersPage() {
 		const newOrders = orders.map(o => o.id === order.id ? { ...o, is_received: newVal } : o);
 		setOrders(newOrders);
 		localStorage.setItem(CACHE_KEY, JSON.stringify(newOrders));
+		pendingOrderReceived.current.set(order.id, newVal);
+		const existingTimer = pendingOrderClearTimers.current.get(order.id);
+		if (existingTimer) clearTimeout(existingTimer);
 		try {
 			await api.patch(`orders/${order.id}/`, { is_received: newVal });
 			toast.success(newVal ? 'Заказ выдан!' : 'Отметка о выдаче снята');
 			broadcastChange();
 			notifyHeader();
+			// Снимаем защиту от перезаписи через 5 сек, чтобы успели вернуться
+			// все polling-запросы, отправленные до коммита PATCH (race с GET /orders/).
+			const t = setTimeout(() => {
+				pendingOrderReceived.current.delete(order.id);
+				pendingOrderClearTimers.current.delete(order.id);
+			}, 5000);
+			pendingOrderClearTimers.current.set(order.id, t);
 		} catch {
+			pendingOrderReceived.current.delete(order.id);
+			pendingOrderClearTimers.current.delete(order.id);
 			setOrders(previousOrders);
 			localStorage.setItem(CACHE_KEY, JSON.stringify(previousOrders));
 			toast.error('Ошибка сети. Действие отменено.');
