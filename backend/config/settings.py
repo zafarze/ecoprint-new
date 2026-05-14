@@ -23,6 +23,8 @@ ALLOWED_HOSTS = ['*']
 # ДОБАВЛЕНО: Разрешаем CSRF-запросы с домена Cloud Run (исправляет ошибку 403)
 CSRF_TRUSTED_ORIGINS = [
     'https://ecoprint-api-789088295892.europe-west3.run.app',
+    'https://*.run.app',
+    'https://*.a.run.app',
 ]
 
 # Cloud Run сидит за HTTPS proxy — говорим Django доверять заголовку X-Forwarded-Proto
