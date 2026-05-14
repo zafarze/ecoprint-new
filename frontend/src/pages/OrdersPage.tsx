@@ -74,6 +74,7 @@ export default function OrdersPage() {
 	const [orderToDelete, setOrderToDelete] = useState<any>(null);
 
 	const pendingItemIds = useRef<Set<number>>(new Set());
+	const pendingClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 	const stablePositionRef = useRef<Map<number, number>>(new Map());
 	const fetchOrdersSilentlyRef = useRef<() => Promise<void>>(() => Promise.resolve());
 	const isModalOpenRef = useRef(false);
@@ -201,6 +202,8 @@ export default function OrdersPage() {
 		return () => {
 			unsubscribeFb?.();
 			clearTimeout(timerId);
+			pendingClearTimers.current.forEach(t => clearTimeout(t));
+			pendingClearTimers.current.clear();
 			document.removeEventListener('visibilitychange', onVisible);
 			window.removeEventListener('focus', onVisible);
 			window.removeEventListener('sync-updated', doFetch);
@@ -225,18 +228,27 @@ export default function OrdersPage() {
 		setOrders(newOrders);
 		localStorage.setItem(CACHE_KEY, JSON.stringify(newOrders));
 		pendingItemIds.current.add(item.id);
+		const existingTimer = pendingClearTimers.current.get(item.id);
+		if (existingTimer) clearTimeout(existingTimer);
 
 		// Звук уведомления (если включён в настройках)
 		playIfEnabled();
 
 		try {
 			await api.patch(`items/${item.id}/`, { status: newStatus });
-			pendingItemIds.current.delete(item.id);
 			broadcastChange();
 			fetchOrdersSilentlyRef.current();
 			notifyHeader();
+			// Снимаем защиту от перезаписи через 5 сек, чтобы успели вернуться
+			// все polling-запросы, отправленные до коммита PATCH (race с GET /orders/).
+			const t = setTimeout(() => {
+				pendingItemIds.current.delete(item.id);
+				pendingClearTimers.current.delete(item.id);
+			}, 5000);
+			pendingClearTimers.current.set(item.id, t);
 		} catch {
 			pendingItemIds.current.delete(item.id);
+			pendingClearTimers.current.delete(item.id);
 			setOrders(previousOrders);
 			localStorage.setItem(CACHE_KEY, JSON.stringify(previousOrders));
 			toast.error('Ошибка сохранения. Данные возвращены назад.');
