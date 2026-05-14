@@ -27,15 +27,22 @@ export default function Layout() {
 		return () => { document.body.style.overflow = ''; };
 	}, [isMobileMenuOpen]);
 
-	// 🔥 Синхронизация (Firebase + polling + visibility/focus)
+	// 🔥 Синхронизация (Firebase + BroadcastChannel + storage + polling + visibility/focus)
 	useEffect(() => {
 		const dispatch = () => window.dispatchEvent(new Event('sync-updated'));
 
 		let timerId: ReturnType<typeof setTimeout>;
-		const loop = () => { dispatch(); timerId = setTimeout(loop, 3000); };
-		timerId = setTimeout(loop, 3000);
+		const pickInterval = () => document.visibilityState === 'visible' ? 1500 : 10000;
+		const loop = () => { dispatch(); timerId = setTimeout(loop, pickInterval()); };
+		timerId = setTimeout(loop, pickInterval());
 
-		const onVisible = () => { if (document.visibilityState === 'visible') dispatch(); };
+		const onVisible = () => {
+			if (document.visibilityState === 'visible') {
+				dispatch();
+				clearTimeout(timerId);
+				timerId = setTimeout(loop, pickInterval());
+			}
+		};
 		document.addEventListener('visibilitychange', onVisible);
 		window.addEventListener('focus', onVisible);
 

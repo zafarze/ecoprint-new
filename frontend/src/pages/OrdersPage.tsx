@@ -202,11 +202,22 @@ export default function OrdersPage() {
 
 		const unsubscribeFb = subscribeToSync(doFetch);
 
+		// Polling — fallback на случай если все push-каналы не сработали.
+		// Когда вкладка видима — частим (1.5 сек), когда фоновая — реже (10 сек), чтобы
+		// не тратить квоту API. Браузер всё равно троттлит фоновые таймеры до ~1/мин.
 		let timerId: ReturnType<typeof setTimeout>;
-		const poll = () => { doFetch(); timerId = setTimeout(poll, 3000); };
-		timerId = setTimeout(poll, 3000);
+		const pickInterval = () => document.visibilityState === 'visible' ? 1500 : 10000;
+		const poll = () => { doFetch(); timerId = setTimeout(poll, pickInterval()); };
+		timerId = setTimeout(poll, pickInterval());
 
-		const onVisible = () => { if (document.visibilityState === 'visible') doFetch(); };
+		const onVisible = () => {
+			if (document.visibilityState === 'visible') {
+				doFetch();
+				// Перезапускаем polling с быстрым интервалом сразу после возврата фокуса.
+				clearTimeout(timerId);
+				timerId = setTimeout(poll, pickInterval());
+			}
+		};
 		document.addEventListener('visibilitychange', onVisible);
 		window.addEventListener('focus', onVisible);
 		window.addEventListener('sync-updated', doFetch);
