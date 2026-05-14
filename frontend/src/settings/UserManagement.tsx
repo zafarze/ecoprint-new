@@ -22,16 +22,33 @@ export default function UserManagement() {
 
 	const meStr = localStorage.getItem('user');
 	const me = meStr && meStr !== 'undefined' ? JSON.parse(meStr) : null;
+	const CACHE_KEY = `cached_users_${me?.id || 'guest'}`;
 
-	const loadUsers = async () => {
-		setIsLoading(true);
+	// Тихий рефетч — не дёргает спиннер, чтобы кэш не мерцал.
+	const fetchUsersSilently = async () => {
 		try {
 			const res = await api.get('users/');
-			setUsers(res.data || []);
+			const data = res.data || [];
+			localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+			setUsers(data);
 		} catch (err) {
 			console.error(err);
 			toast.error('Не удалось загрузить сотрудников');
-		} finally { setIsLoading(false); }
+		}
+	};
+
+	const loadUsers = async () => {
+		// Мгновенный показ из кэша, потом тихое обновление с сервера.
+		// Это снимает "Загрузка..." при холодном старте Cloud Run.
+		const cached = localStorage.getItem(CACHE_KEY);
+		if (cached) {
+			try { setUsers(JSON.parse(cached)); setIsLoading(false); }
+			catch { setIsLoading(true); }
+		} else {
+			setIsLoading(true);
+		}
+		await fetchUsersSilently();
+		setIsLoading(false);
 	};
 	useEffect(() => { loadUsers(); }, []);
 
@@ -45,7 +62,7 @@ export default function UserManagement() {
 				toast.success('Сотрудник создан! Стартовый пароль: 123456', { duration: 5000 });
 			}
 			setIsModalOpen(false);
-			loadUsers();
+			fetchUsersSilently();
 		} catch (e: any) {
 			const msg = e.response?.data?.username ? 'Такой логин уже существует' : 'Ошибка сохранения';
 			toast.error(msg);
@@ -57,7 +74,7 @@ export default function UserManagement() {
 		try {
 			await api.delete(`users/${userToDelete.id}/`);
 			toast.success('Сотрудник удалён');
-			loadUsers();
+			fetchUsersSilently();
 		} catch { toast.error('Ошибка при удалении'); }
 		finally { setIsDeleteModalOpen(false); setUserToDelete(null); }
 	};
