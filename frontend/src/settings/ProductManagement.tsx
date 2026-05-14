@@ -21,11 +21,30 @@ export default function ProductManagement() {
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 	const [productToDelete, setProductToDelete] = useState<any>(null);
 
+	const CACHE_KEY = 'cached_products';
+
+	// Тихий рефетч — без спиннера, чтобы кэш не мерцал.
+	const fetchSilently = async () => {
+		try {
+			const res = await api.get('products/');
+			const data = res.data || [];
+			localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+			setProducts(data);
+		} catch { toast.error('Ошибка загрузки товаров'); }
+	};
+
 	const load = async () => {
-		setIsLoading(true);
-		try { const res = await api.get('products/'); setProducts(res.data || []); }
-		catch { toast.error('Ошибка загрузки товаров'); }
-		finally { setIsLoading(false); }
+		// Мгновенный показ из кэша, потом тихое обновление с сервера.
+		// Снимает "Загрузка..." при холодном старте Cloud Run.
+		const cached = localStorage.getItem(CACHE_KEY);
+		if (cached) {
+			try { setProducts(JSON.parse(cached)); setIsLoading(false); }
+			catch { setIsLoading(true); }
+		} else {
+			setIsLoading(true);
+		}
+		await fetchSilently();
+		setIsLoading(false);
 	};
 	useEffect(() => { load(); }, []);
 
@@ -35,13 +54,13 @@ export default function ProductManagement() {
 			else await api.post('products/', data);
 			toast.success(editingProduct ? 'Товар обновлён' : 'Товар добавлен');
 			setIsModalOpen(false);
-			load();
+			fetchSilently();
 		} catch { toast.error('Ошибка сохранения'); }
 	};
 
 	const confirmDelete = async () => {
 		if (!productToDelete) return;
-		try { await api.delete(`products/${productToDelete.id}/`); toast.success('Товар удалён'); load(); }
+		try { await api.delete(`products/${productToDelete.id}/`); toast.success('Товар удалён'); fetchSilently(); }
 		catch { toast.error('Ошибка при удалении'); }
 		finally { setIsDeleteModalOpen(false); setProductToDelete(null); }
 	};
