@@ -4,9 +4,30 @@
     ".write": false,
     "ecoprint": {
       "sync": {
-        ".read": true,
-        ".write": true
-      }
+        "lastEvent": {
+          ".read": true,
+          ".write": true,
+          ".validate": "newData.hasChildren(['type', 'ts', 'src'])",
+          "type": {
+            ".validate": "newData.isString() && (newData.val() === 'item-status' || newData.val() === 'order-received' || newData.val() === 'orders-changed')"
+          },
+          "ts": {
+            ".validate": "newData.isNumber() && newData.val() > 1700000000000 && newData.val() < (now + 60000)"
+          },
+          "src": {
+            ".validate": "newData.isString() && newData.val().length <= 128"
+          },
+          "orderId": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 9999999" },
+          "itemId":  { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 9999999" },
+          "status":  { ".validate": "newData.isString() && (newData.val() === 'ready' || newData.val() === 'in-progress' || newData.val() === 'not-ready')" },
+          "orderStatus": { ".validate": "newData.isString() && (newData.val() === 'ready' || newData.val() === 'in-progress' || newData.val() === 'not-ready')" },
+          "is_received": { ".validate": "newData.isBoolean()" },
+          "revert": { ".validate": "newData.isBoolean()" },
+          "$other": { ".validate": false }
+        },
+        "$other": { ".validate": false }
+      },
+      "$other": { ".validate": false }
     }
   }
 }
