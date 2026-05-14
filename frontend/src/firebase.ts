@@ -25,8 +25,8 @@ const db = getDatabase(app);
 const syncNodeRef = ref(db, 'ecoprint/sync/lastEvent');
 
 export type SyncPayload =
-	| { type: 'item-status'; orderId: number; itemId: number; status: string; orderStatus?: string; ts: number; src: string }
-	| { type: 'order-received'; orderId: number; is_received: boolean; ts: number; src: string }
+	| { type: 'item-status'; orderId: number; itemId: number; status: string; orderStatus?: string; revert?: boolean; ts: number; src: string }
+	| { type: 'order-received'; orderId: number; is_received: boolean; revert?: boolean; ts: number; src: string }
 	| { type: 'orders-changed'; ts: number; src: string };
 
 // Distributive Omit — без него TS не находит `orderId` в Omit<SyncPayload, 'ts' | 'src'>.

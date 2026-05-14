@@ -148,6 +148,16 @@ export default function OrdersPage() {
 	// Возвращает true, если изменение применено — тогда refetch не нужен.
 	const applySyncPatch = (payload: SyncPayload | null): boolean => {
 		if (!payload || payload.type === 'orders-changed') return false;
+
+		// Информационный тост при откате (только на устройстве-получателе;
+		// устройство-отправитель фильтруется по src === SELF_SRC в firebase.ts).
+		if (payload.type === 'item-status' && payload.revert) {
+			toast('Изменение отменено', { icon: 'ℹ️' });
+		}
+		if (payload.type === 'order-received' && payload.revert) {
+			toast('Изменение отменено', { icon: 'ℹ️' });
+		}
+
 		if (payload.type === 'item-status') {
 			setOrders(prev => {
 				const next = prev.map(o => {
@@ -161,6 +171,17 @@ export default function OrdersPage() {
 				localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 				return next;
 			});
+			// Блокируем перезапись со стороны polling на этом устройстве на 5 сек
+			// (те же refs, что используют handleToggleItemStatus — логика overlay в
+			// fetchOrdersSilently не различает, кто поставил pending-запись).
+			const existingT = pendingClearTimers.current.get(payload.itemId);
+			if (existingT) clearTimeout(existingT);
+			pendingItemIds.current.add(payload.itemId);
+			const t = setTimeout(() => {
+				pendingItemIds.current.delete(payload.itemId);
+				pendingClearTimers.current.delete(payload.itemId);
+			}, 5000);
+			pendingClearTimers.current.set(payload.itemId, t);
 			return true;
 		}
 		if (payload.type === 'order-received') {
@@ -169,6 +190,15 @@ export default function OrdersPage() {
 				localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 				return next;
 			});
+			// Блокируем перезапись со стороны polling на этом устройстве на 5 сек.
+			const existingT = pendingOrderClearTimers.current.get(payload.orderId);
+			if (existingT) clearTimeout(existingT);
+			pendingOrderReceived.current.set(payload.orderId, payload.is_received);
+			const t = setTimeout(() => {
+				pendingOrderReceived.current.delete(payload.orderId);
+				pendingOrderClearTimers.current.delete(payload.orderId);
+			}, 5000);
+			pendingOrderClearTimers.current.set(payload.orderId, t);
 			return true;
 		}
 		return false;
@@ -277,7 +307,7 @@ export default function OrdersPage() {
 	}, []);
 
 	const handleToggleItemStatus = async (item: any, orderId: number) => {
-		const previousOrders = [...orders];
+		const previousStatus = item.status;
 		const nextStatus: Record<string, string> = { 'not-ready': 'in-progress', 'in-progress': 'ready', 'ready': 'not-ready' };
 		const newStatus = nextStatus[item.status];
 		if (!newStatus) return;
@@ -300,10 +330,13 @@ export default function OrdersPage() {
 		// Звук уведомления (если включён в настройках)
 		playIfEnabled();
 
+		// Оптимистичный broadcast — до await, чтобы другие устройства сразу получили
+		// обновление, не дожидаясь завершения PATCH (который может занять до минуты при холодном старте).
+		broadcastChange({ type: 'item-status', orderId, itemId: item.id, status: newStatus, orderStatus: newOrderStatus });
+		notifyHeader();
+
 		try {
 			await api.patch(`items/${item.id}/`, { status: newStatus });
-			broadcastChange({ type: 'item-status', orderId, itemId: item.id, status: newStatus, orderStatus: newOrderStatus });
-			notifyHeader();
 			// Снимаем защиту от перезаписи через 5 сек, чтобы успели вернуться
 			// все polling-запросы, отправленные до коммита PATCH (race с GET /orders/).
 			const t = setTimeout(() => {
@@ -314,14 +347,24 @@ export default function OrdersPage() {
 		} catch {
 			pendingItemIds.current.delete(item.id);
 			pendingClearTimers.current.delete(item.id);
-			setOrders(previousOrders);
-			localStorage.setItem(CACHE_KEY, JSON.stringify(previousOrders));
+			// Точечный откат: возвращаем именно этот item, не трогая параллельные изменения других items / заказов.
+			setOrders(prev => {
+				const next = prev.map(o => {
+					if (o.id !== orderId) return o;
+					const items = o.items?.map((i: any) => i.id === item.id ? { ...i, status: previousStatus } : i) || [];
+					return { ...o, items, status: deriveOrderStatus(items) };
+				});
+				localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+				return next;
+			});
 			toast.error('Ошибка сохранения. Данные возвращены назад.');
+			// orderStatus НЕ передаём — пусть приёмники пересчитают из своих items (их состояние может отличаться).
+			broadcastChange({ type: 'item-status', orderId, itemId: item.id, status: previousStatus, revert: true });
 		}
 	};
 
 	const handleToggleReceived = async (order: any) => {
-		const previousOrders = [...orders];
+		const previousVal = order.is_received;
 		const newVal = !order.is_received;
 		const newOrders = orders.map(o => o.id === order.id ? { ...o, is_received: newVal } : o);
 		setOrders(newOrders);
@@ -329,11 +372,15 @@ export default function OrdersPage() {
 		pendingOrderReceived.current.set(order.id, newVal);
 		const existingTimer = pendingOrderClearTimers.current.get(order.id);
 		if (existingTimer) clearTimeout(existingTimer);
+
+		// Оптимистичный broadcast — до await, чтобы другие устройства сразу получили
+		// обновление, не дожидаясь завершения PATCH (который может занять до минуты при холодном старте).
+		broadcastChange({ type: 'order-received', orderId: order.id, is_received: newVal });
+		notifyHeader();
+
 		try {
 			await api.patch(`orders/${order.id}/`, { is_received: newVal });
 			toast.success(newVal ? 'Заказ выдан!' : 'Отметка о выдаче снята');
-			broadcastChange({ type: 'order-received', orderId: order.id, is_received: newVal });
-			notifyHeader();
 			// Снимаем защиту от перезаписи через 5 сек, чтобы успели вернуться
 			// все polling-запросы, отправленные до коммита PATCH (race с GET /orders/).
 			const t = setTimeout(() => {
@@ -344,8 +391,13 @@ export default function OrdersPage() {
 		} catch {
 			pendingOrderReceived.current.delete(order.id);
 			pendingOrderClearTimers.current.delete(order.id);
-			setOrders(previousOrders);
-			localStorage.setItem(CACHE_KEY, JSON.stringify(previousOrders));
+			// Точечный откат: возвращаем именно этот заказ, не трогая параллельные изменения.
+			setOrders(prev => {
+				const next = prev.map(o => o.id === order.id ? { ...o, is_received: previousVal } : o);
+				localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+				return next;
+			});
+			broadcastChange({ type: 'order-received', orderId: order.id, is_received: previousVal, revert: true });
 			toast.error('Ошибка сети. Действие отменено.');
 		}
 	};
