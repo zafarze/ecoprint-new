@@ -47,10 +47,18 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 
 	useEffect(() => {
 		if (!isOpen) return;
+		// Мгновенно показываем товары из кэша (тот же ключ, что у ProductManagement),
+		// чтобы список «Тип продукции» не ждал ответа API. Потом тихо обновляем.
+		const cached = localStorage.getItem('cached_products');
+		if (cached) {
+			try { setProducts(JSON.parse(cached)); } catch { /* битый кэш — игнор */ }
+		}
 		(async () => {
 			try {
 				const pRes = await api.get('products/');
-				setProducts(pRes.data || []);
+				const data = pRes.data || [];
+				setProducts(data);
+				localStorage.setItem('cached_products', JSON.stringify(data));
 			} catch (e) { console.error('Загрузка справочников:', e); }
 		})();
 	}, [isOpen]);
