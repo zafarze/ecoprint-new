@@ -1030,6 +1030,7 @@ body::after {
 /* ── CustomSelect component ─────────────────────────────────────── */
 .custom-select-trigger {
     width: 100%;
+    min-width: 0;
     padding: 14px 18px;
     border: 2px solid var(--border-color);
     border-radius: 12px;
@@ -1071,8 +1072,12 @@ body::after {
     box-shadow: none;
 }
 
-.custom-select-trigger.is-disabled .fa-chevron-down {
-    opacity: 0.3;
+.custom-select-value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .custom-select-panel {
@@ -1750,8 +1755,14 @@ header {
     display: grid;
     /* Было: grid-template-columns: 1fr 1fr 1fr; */
     grid-template-columns: 1fr 1fr 1fr 1fr; /* Стало (4 колонки) */
-    gap: 20px;
+    gap: 14px;
     align-items: start;
+}
+.item-form-grid-3 .form-group label { margin-bottom: 6px; font-size: 13px; }
+.item-form-grid-3 .form-group input,
+.item-form-grid-3 .custom-select-trigger {
+    padding: 11px 14px;
+    font-size: 14px;
 }
 
 td[rowspan] {

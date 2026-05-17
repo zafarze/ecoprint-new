@@ -25,24 +25,32 @@ const newItem = (currentUserId?: number | string) => ({
 });
 
 export default function OrderModal({ isOpen, onClose, onSave, initialData }: OrderModalProps) {
-	const userStr = localStorage.getItem('user');
-	const currentUser = userStr && userStr !== 'undefined' ? JSON.parse(userStr) : null;
+	const currentUser = useMemo(() => {
+		try {
+			const s = localStorage.getItem('user');
+			return s && s !== 'undefined' ? JSON.parse(s) : null;
+		} catch { return null; }
+	}, []);
 
 	const [client, setClient] = useState('');
 	const [clientPhone, setClientPhone] = useState('');
 	const [items, setItems] = useState<any[]>([newItem(currentUser?.id)]);
 	const [products, setProducts] = useState<any[]>([]);
-	const [users, setUsers] = useState<any[]>([]);
 	const [openSuggestionsFor, setOpenSuggestionsFor] = useState<number | string | null>(null);
 	const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+	const userLabel = (u: any) => {
+		if (!u) return '';
+		const full = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+		return full || u.username || '';
+	};
 
 	useEffect(() => {
 		if (!isOpen) return;
 		(async () => {
 			try {
-				const [pRes, uRes] = await Promise.all([api.get('products/'), api.get('users/')]);
+				const pRes = await api.get('products/');
 				setProducts(pRes.data || []);
-				setUsers(uRes.data || []);
 			} catch (e) { console.error('Загрузка справочников:', e); }
 		})();
 	}, [isOpen]);
@@ -124,6 +132,7 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 									<input
 										type="text" id="clientName" placeholder="Введите имя клиента"
 										required value={client} onChange={e => setClient(e.target.value)}
+										autoComplete="off"
 									/>
 								</div>
 								<div className="form-group">
@@ -131,6 +140,7 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 									<input
 										type="tel" id="clientPhone" placeholder="+992 00 000 0000"
 										value={clientPhone} onChange={e => setClientPhone(e.target.value)}
+										autoComplete="off"
 									/>
 								</div>
 							</div>
@@ -146,120 +156,121 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 							</div>
 
 							<div className="items-form-container" id="itemsFormContainer">
-								{items.map((item, idx) => (
-									<div className="item-form-card" key={item.id}>
-										<div className="item-form-header">
-											<span className="item-number-badge">
-												<i className="fas fa-cube"></i>
-												Товар <span className="item-number">{idx + 1}</span>
-											</span>
-											{items.length > 1 && (
-												<button type="button" className="remove-item-btn" onClick={() => removeItem(item.id)} title="Удалить">
-													<i className="fas fa-times"></i>
-												</button>
-											)}
-										</div>
-
-										<div className="product-type-section">
-											<div className="product-type-label">Тип продукции *</div>
-											<div className="product-input-group">
-												<input
-													type="text"
-													className="product-name-input"
-													placeholder="Введите название или выберите из списка"
-													required
-													value={item.name}
-													onChange={e => updateItem(item.id, 'name', e.target.value)}
-												/>
-												<button
-													type="button"
-													className="product-type-btn"
-													onClick={() => setOpenSuggestionsFor(openSuggestionsFor === item.id ? null : item.id)}
-												>
-													<i className={`fas ${openSuggestionsFor === item.id ? 'fa-times' : 'fa-list'}`}></i>
-													{openSuggestionsFor === item.id ? ' Скрыть список' : ' Выбрать из списка'}
-												</button>
+								{items.map((item, idx) => {
+									const creator =
+										(item.responsible_user?.id != null ? item.responsible_user : null) ||
+										(currentUser?.id != null ? currentUser : null);
+									return (
+										<div className="item-form-card" key={item.id}>
+											<div className="item-form-header">
+												<span className="item-number-badge">
+													<i className="fas fa-cube"></i>
+													Товар <span className="item-number">{idx + 1}</span>
+												</span>
+												{items.length > 1 && (
+													<button type="button" className="remove-item-btn" onClick={() => removeItem(item.id)} title="Удалить">
+														<i className="fas fa-times"></i>
+													</button>
+												)}
 											</div>
-											{openSuggestionsFor === item.id && (
-												<div className="product-suggestions" style={{ display: 'grid' }}>
-													{products.map(p => (
-														<div
-															key={p.id}
-															className="product-suggestion"
-															onClick={() => { updateItem(item.id, 'name', p.name); setOpenSuggestionsFor(null); }}
-														>
-															<i className={p.icon || 'fas fa-box'}></i>
-															<span>{p.name}</span>
-														</div>
-													))}
+
+											<div className="product-type-section">
+												<div className="product-type-label">Тип продукции *</div>
+												<div className="product-input-group">
+													<input
+														type="text"
+														className="product-name-input"
+														placeholder="Введите название или выберите из списка"
+														required
+														value={item.name}
+														onChange={e => updateItem(item.id, 'name', e.target.value)}
+														autoComplete="off"
+													/>
+													<button
+														type="button"
+														className="product-type-btn"
+														onClick={() => setOpenSuggestionsFor(openSuggestionsFor === item.id ? null : item.id)}
+													>
+														<i className={`fas ${openSuggestionsFor === item.id ? 'fa-times' : 'fa-list'}`}></i>
+														{openSuggestionsFor === item.id ? ' Скрыть список' : ' Выбрать из списка'}
+													</button>
 												</div>
-											)}
-										</div>
+												{openSuggestionsFor === item.id && (
+													<div className="product-suggestions" style={{ display: 'grid' }}>
+														{products.map(p => (
+															<div
+																key={p.id}
+																className="product-suggestion"
+																onClick={() => { updateItem(item.id, 'name', p.name); setOpenSuggestionsFor(null); }}
+															>
+																<i className={p.icon || 'fas fa-box'}></i>
+																<span>{p.name}</span>
+															</div>
+														))}
+													</div>
+												)}
+											</div>
 
-										<div className="item-form-grid-3">
-											<div className="form-group">
-												<label>Количество *</label>
-												<input
-													type="number" className="item-quantity" min={1} required
-													value={item.quantity}
-													onChange={e => updateItem(item.id, 'quantity', e.target.value)}
-												/>
+											<div className="item-form-grid-3">
+												<div className="form-group">
+													<label>Количество *</label>
+													<input
+														type="number" className="item-quantity" min={1} required
+														value={item.quantity}
+														onChange={e => updateItem(item.id, 'quantity', e.target.value)}
+													/>
+												</div>
+												<div className="form-group">
+													<label>Создатель</label>
+													<CustomSelect
+														disabled
+														value={String(item.responsible_user_id || '')}
+														onChange={v => updateItem(item.id, 'responsible_user_id', v)}
+														className="item-responsible-user"
+														placeholder="—"
+														options={
+															creator
+																? [{ value: String(creator.id), label: userLabel(creator) }]
+																: [{ value: '', label: '—' }]
+														}
+													/>
+												</div>
+												<div className="form-group">
+													<label>Срок сдачи *</label>
+													<input
+														type="date" className="item-deadline-input" required
+														min={todayStr()}
+														value={item.deadline}
+														onChange={e => updateItem(item.id, 'deadline', e.target.value)}
+													/>
+												</div>
+												<div className="form-group">
+													<label>Статус товара</label>
+													<CustomSelect
+														value={item.status}
+														onChange={v => updateItem(item.id, 'status', v)}
+														className="item-status-select"
+														options={[
+															{ value: 'not-ready', label: 'Не готов' },
+															{ value: 'in-progress', label: 'В процессе' },
+															{ value: 'ready', label: 'Готов' },
+														]}
+													/>
+												</div>
 											</div>
-											<div className="form-group">
-												<label>Создатель</label>
-												<CustomSelect
-													disabled
-													value={String(item.responsible_user_id || '')}
-													onChange={v => updateItem(item.id, 'responsible_user_id', v)}
-													className="item-responsible-user"
-													placeholder="— Загрузка... —"
-													options={
-														users.length === 0
-															? [{ value: '', label: '— Загрузка... —' }]
-															: users.map(u => ({
-																value: String(u.id),
-																label: (u.first_name || u.last_name)
-																	? `${u.first_name || ''} ${u.last_name || ''}`.trim()
-																	: u.username,
-															}))
-													}
-												/>
-											</div>
-											<div className="form-group">
-												<label>Срок сдачи *</label>
-												<input
-													type="date" className="item-deadline-input" required
-													min={todayStr()}
-													value={item.deadline}
-													onChange={e => updateItem(item.id, 'deadline', e.target.value)}
-												/>
-											</div>
-											<div className="form-group">
-												<label>Статус товара</label>
-												<CustomSelect
-													value={item.status}
-													onChange={v => updateItem(item.id, 'status', v)}
-													className="item-status-select"
-													options={[
-														{ value: 'not-ready', label: 'Не готов' },
-														{ value: 'in-progress', label: 'В процессе' },
-														{ value: 'ready', label: 'Готов' },
-													]}
-												/>
-											</div>
-										</div>
 
-										<div className="form-group" style={{ marginTop: 10 }}>
-											<label>Комментарий / Заметка</label>
-											<textarea
-												className="item-comment"
-												placeholder="Напр: матовая бумага, 300г/м², проверить макет..."
-												value={item.comment || ''}
-												onChange={e => updateItem(item.id, 'comment', e.target.value)}
-											/>
+											<div className="form-group" style={{ marginTop: 10 }}>
+												<label>Комментарий / Заметка</label>
+												<textarea
+													className="item-comment"
+													placeholder="Напр: матовая бумага, 300г/м², проверить макет..."
+													value={item.comment || ''}
+													onChange={e => updateItem(item.id, 'comment', e.target.value)}
+												/>
+											</div>
 										</div>
-									</div>
-								))}
+									);
+								})}
 							</div>
 
 							<div className="add-item-section">

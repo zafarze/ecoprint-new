@@ -277,8 +277,8 @@ export default function CustomSelect({
 				aria-disabled={disabled || undefined}
 				disabled={disabled}
 			>
-				<span>{selectedLabel}</span>
-				<i className="fas fa-chevron-down" aria-hidden="true" />
+				<span className="custom-select-value" title={selectedLabel}>{selectedLabel}</span>
+				{!disabled && <i className="fas fa-chevron-down" aria-hidden="true" />}
 			</button>
 
 			{open && ReactDOM.createPortal(panel, document.body)}
