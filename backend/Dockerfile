@@ -20,4 +20,4 @@ RUN python manage.py collectstatic --noinput
 
 # Команда для запуска сервера (Gunicorn - это мощный сервер для продакшена)
 # Добавлен вызов migrate перед запуском для применения миграций в Cloud Run
-CMD sh -c "python manage.py migrate && exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2"
+CMD sh -c "python manage.py migrate && exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
