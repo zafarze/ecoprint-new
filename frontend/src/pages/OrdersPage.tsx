@@ -825,6 +825,9 @@ export default function OrdersPage() {
 								const isRec = !!order.is_received;
 								const recClass = isRec ? 'received-true' : 'received-false';
 								const recIcon = isRec ? 'fa-check-double' : 'fa-hand-holding';
+								// Кнопка "Готов к выдаче" видна только когда ВСЕ товары готовы.
+								// isRec оставляет кнопку "Получен" доступной, чтобы можно было снять отметку.
+								const allItemsReady = sortedItems.length > 0 && sortedItems.every((it: any) => it.status === 'ready');
 
 								return (
 									<tr key={order.id}>
@@ -910,7 +913,7 @@ export default function OrdersPage() {
 
 										<td style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
 											<span className={`status-badge status-${order.status}`}>{STATUS_TEXT[order.status] || order.status}</span>
-											{canIssueOrders && (
+											{canIssueOrders && (isRec || allItemsReady) && (
 												<button
 													className={`received-btn ${recClass}`}
 													style={{ width: 'auto', minWidth: 130 }}
