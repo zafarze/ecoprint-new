@@ -1,3 +1,4 @@
+import hmac
 import os
 import threading
 # import gspread
@@ -13,10 +14,11 @@ from django.views.decorators.cache import never_cache
 from django.contrib.auth.models import User
 
 from rest_framework import viewsets, permissions
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 # from .ai_service import ask_gemini
@@ -30,6 +32,7 @@ from .serializers import (
 from .telegram_bot import send_telegram_notification
 
 from .permissions import IsSuperAdmin, IsManagerOrAdmin
+from .services import run_auto_archive
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -40,7 +43,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         # Удалять заказ может строго супер-админ
-        if self.action in ['destroy']:
+        if self.action in ['destroy', 'trigger_auto_archive']:
             return [IsSuperAdmin()]
         # Создавать, менять, архивировать заказы может Менеджер и Админ
         elif self.action in ['create', 'update', 'partial_update', 'archive', 'unarchive']:
@@ -92,45 +95,8 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def trigger_auto_archive(self, request):
-        from django.db.models import Q
-        
-        # 1. Считаем дату: ровно 3 дня назад от текущего момента
-        three_days_ago = timezone.now() - timedelta(days=3)
-        
-        # 2. Ищем заказы: не в архиве, ВЫДАНЫ клиенту и дата выдачи старше 3 дней 
-        # (у старых заказов received_at может быть NULL, тогда смотрим по updated_at)
-        orders_to_archive = Order.objects.filter(
-            Q(received_at__lte=three_days_ago) | 
-            Q(received_at__isnull=True, updated_at__lte=three_days_ago),
-            is_archived=False, 
-            is_received=True
-        )
-        
-        # Собираем ID этих заказов, чтобы заархивировать и сами заказы, и их товары
-        order_ids = list(orders_to_archive.values_list('id', flat=True))
-        
-        if order_ids:
-            # Безопасная транзакция: архивируем всё разом
-            with transaction.atomic():
-                Order.objects.filter(id__in=order_ids).update(is_archived=True)
-                Item.objects.filter(order_id__in=order_ids).update(is_archived=True)
-                
-        # --- БЛОК АВТОМАТИЧЕСКОГО УДАЛЕНИЯ ИЗ АРХИВА ЧЕРЕЗ 30 ДНЕЙ ---
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        orders_to_delete = Order.objects.filter(
-            is_archived=True,
-            updated_at__lte=thirty_days_ago
-        )
-        
-        delete_count = orders_to_delete.count()
-        if delete_count > 0:
-            with transaction.atomic():
-                orders_to_delete.delete()
-
-        return Response({
-            'status': 'success',
-            'message': f'{len(order_ids)} заказов отправлено в архив. {delete_count} удалено из архива навсегда.'
-        })
+        result = run_auto_archive()
+        return Response(result)
 
     def partial_update(self, request, *args, **kwargs):
         # 🔥 Авто-проставляем received_at при выдаче заказа
@@ -424,9 +390,8 @@ def sync_to_google_sheets(request):
 @permission_classes([permissions.AllowAny])
 def sync_sheets_webhook(request):
     secret = request.GET.get('secret')
-    expected_secret = os.environ.get('CRON_SECRET', 'ecoprint_secret_cron_job_2026')
-    
-    if secret != expected_secret:
+    expected_secret = os.environ.get('CRON_SECRET')
+    if not expected_secret or not secret or not hmac.compare_digest(str(secret), str(expected_secret)):
         return Response({'error': 'Invalid secret key'}, status=403)
         
     # Код синхронизации аналогичен верхней функции
@@ -693,19 +658,44 @@ def poll_new_orders(request):
         })
     return Response({'has_new': False, 'latest_id': last_id})
 
+import logging
 from .telegram_bot import send_daily_deadline_reminders
-from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 import os
+
+logger = logging.getLogger(__name__)
+
+
+class CronWebhookThrottle(AnonRateThrottle):
+    scope = 'cron_webhook'
+    rate = '30/hour'
+
 
 @api_view(['POST', 'GET'])
 @permission_classes([AllowAny])
 def webhook_daily_reminders(request):
     incoming_secret = request.data.get('secret') or request.query_params.get('secret')
-    expected_secret = os.environ.get('CRON_SECRET', 'ecoprint_secret_cron_job_2026')
-    
-    if incoming_secret != expected_secret:
+    expected_secret = os.environ.get('CRON_SECRET')
+    if not expected_secret or not incoming_secret or not hmac.compare_digest(str(incoming_secret), str(expected_secret)):
         return Response({'error': 'Unauthorized cron'}, status=403)
-        
+
     send_daily_deadline_reminders()
     return Response({'status': 'Daily reminders triggered'})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([CronWebhookThrottle])
+def webhook_auto_archive(request):
+    incoming_secret = request.headers.get('X-Cron-Secret') or request.data.get('secret')
+    expected_secret = os.environ.get('CRON_SECRET')
+    if not expected_secret or not incoming_secret or not hmac.compare_digest(str(incoming_secret), str(expected_secret)):
+        return Response({'error': 'Unauthorized'}, status=403)
+
+    dry_run = str(request.data.get('dry_run') or request.query_params.get('dry_run') or '').lower() in ('1', 'true', 'yes')
+    try:
+        result = run_auto_archive(dry_run=dry_run)
+        return Response(result)
+    except Exception:
+        logger.exception('webhook_auto_archive failed')
+        return Response({'status': 'error', 'message': 'Internal error'}, status=500)

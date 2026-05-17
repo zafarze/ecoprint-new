@@ -1,8 +1,76 @@
+import logging
+from datetime import timedelta
+
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 from django.contrib.auth.models import User
 from typing import List, Dict, Any
 
 from .models import Order, Item, OrderHistory, Product
+
+logger = logging.getLogger(__name__)
+
+
+def run_auto_archive(dry_run: bool = False) -> dict:
+    now = timezone.now()
+    three_days_ago = now - timedelta(days=3)
+    thirty_days_ago = now - timedelta(days=30)
+
+    archive_filter = (
+        Q(received_at__lte=three_days_ago)
+        | Q(received_at__isnull=True, updated_at__lte=three_days_ago)
+    )
+
+    archive_ids = []
+    delete_ids = []
+
+    if dry_run:
+        archive_ids = list(
+            Order.objects.filter(archive_filter, is_archived=False, is_received=True)
+            .values_list('id', flat=True)
+        )
+        delete_ids = list(
+            Order.objects.filter(is_archived=True, updated_at__lte=thirty_days_ago)
+            .values_list('id', flat=True)
+        )
+    else:
+        with transaction.atomic():
+            archive_ids = list(
+                Order.objects.filter(archive_filter, is_archived=False, is_received=True)
+                .values_list('id', flat=True)
+            )
+            if archive_ids:
+                Order.objects.filter(id__in=archive_ids).update(
+                    is_archived=True, updated_at=now
+                )
+                Item.objects.filter(order_id__in=archive_ids, is_archived=False).update(
+                    is_archived=True
+                )
+            # Re-query INSIDE the transaction, AFTER archiving: freshly-archived
+            # orders now have updated_at=now and will NOT match the 30-day filter.
+            delete_ids = list(
+                Order.objects.filter(is_archived=True, updated_at__lte=thirty_days_ago)
+                .values_list('id', flat=True)
+            )
+            if delete_ids:
+                logger.warning('auto_archive: hard-deleting orders %s', delete_ids)
+                Order.objects.filter(id__in=delete_ids).delete()
+
+        # Reached only if the transaction committed successfully.
+        if delete_ids:
+            logger.warning('auto_archive: committed permanent deletion of orders %s', delete_ids)
+        logger.info('auto_archive done: archived=%d deleted=%d', len(archive_ids), len(delete_ids))
+
+    return {
+        'archived_count': len(archive_ids),
+        'archived_ids': archive_ids,
+        'deleted_count': len(delete_ids),
+        'deleted_ids': delete_ids,
+        'dry_run': dry_run,
+        'ran_at': now.isoformat(),
+    }
+
 
 class OrderService:
     @staticmethod

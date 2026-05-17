@@ -28,6 +28,7 @@ urlpatterns = [
     path('sync-sheets/', views.sync_to_google_sheets, name='app-sync-sheets'),
     path('webhook-sync-sheets/', views.sync_sheets_webhook, name='app-webhook-sync-sheets'),
     path('webhook-daily-reminders/', views.webhook_daily_reminders, name='app-webhook-daily-reminders'),
+    path('webhook-auto-archive/', views.webhook_auto_archive, name='app-webhook-auto-archive'),
     path('ai-chat/', views.chat_with_ai, name='app-ai-chat'),
 
     # Глобальное состояние системы для мгновенных обновлений
