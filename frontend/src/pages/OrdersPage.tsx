@@ -79,6 +79,8 @@ export default function OrdersPage() {
 	const pendingOrderClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 	const pendingDeletedIds = useRef<Set<number>>(new Set());
 	const pendingDeletedClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+	const pendingCreatedOrders = useRef<Map<number, any>>(new Map());
+	const pendingCreatedClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 	const stablePositionRef = useRef<Map<number, number>>(new Map());
 	const fetchOrdersSilentlyRef = useRef<() => Promise<void>>(() => Promise.resolve());
 	const isModalOpenRef = useRef(false);
@@ -213,6 +215,22 @@ export default function OrdersPage() {
 		} catch (err) { console.error('Ошибка загрузки продукции:', err); }
 	};
 
+	// Возвращает список с добавленными сверху оптимистичными заказами,
+	// которых сервер ещё не вернул. Когда сервер уже содержит заказ
+	// (по реальному id) — снимаем его из pending-overlay.
+	const applyPendingCreates = (serverList: any[]): any[] => {
+		if (pendingCreatedOrders.current.size === 0) return serverList;
+		const serverIds = new Set(serverList.map((o: any) => o.id));
+		const prepend: any[] = [];
+		const settled: number[] = [];
+		pendingCreatedOrders.current.forEach((order, fakeId) => {
+			if (serverIds.has(order.id)) settled.push(fakeId);
+			else prepend.push(order);
+		});
+		settled.forEach(fakeId => unmarkOrderCreated(fakeId));
+		return prepend.length ? [...prepend, ...serverList] : serverList;
+	};
+
 	const fetchOrdersSilently = async () => {
 		try {
 			const res = await api.get('orders/?is_archived=false');
@@ -241,12 +259,12 @@ export default function OrdersPage() {
 						};
 					}));
 					localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
-					return merged;
+					return applyPendingCreates(merged);
 				});
 			} else {
 				const normalized = normalizeOrders(filteredData);
 				localStorage.setItem(CACHE_KEY, JSON.stringify(normalized));
-				setOrders(normalized);
+				setOrders(applyPendingCreates(normalized));
 			}
 		} catch (err) { console.error('Ошибка при загрузке заказов:', err); }
 	};
@@ -307,6 +325,8 @@ export default function OrdersPage() {
 			pendingOrderClearTimers.current.clear();
 			pendingDeletedClearTimers.current.forEach(t => clearTimeout(t));
 			pendingDeletedClearTimers.current.clear();
+			pendingCreatedClearTimers.current.forEach(t => clearTimeout(t));
+			pendingCreatedClearTimers.current.clear();
 			document.removeEventListener('visibilitychange', onVisible);
 			window.removeEventListener('focus', onVisible);
 			window.removeEventListener('sync-updated', doFetch);
@@ -430,7 +450,8 @@ export default function OrdersPage() {
 				})),
 			};
 			const next = [fake, ...orders];
-			setOrders(next); localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+			setOrders(next); localStorage.setItem(CACHE_KEY, JSON.stringify(orders));
+			markOrderCreated(fakeId, fake);
 		}
 
 		try {
@@ -443,6 +464,7 @@ export default function OrdersPage() {
 			} else {
 				const res = await api.post('orders/', orderData);
 				saved = res.data;
+				markOrderCreated(fakeId, saved);
 				setOrders(prev => {
 					const next = prev.map(o => o.id === fakeId ? saved : o);
 					localStorage.setItem(CACHE_KEY, JSON.stringify(next));
@@ -460,6 +482,7 @@ export default function OrdersPage() {
 					localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 					return next;
 				});
+				unmarkOrderCreated(fakeId);
 			}
 			fetchOrdersSilently();
 		}
@@ -489,6 +512,33 @@ export default function OrdersPage() {
 		pendingDeletedIds.current.delete(orderId);
 		const existing = pendingDeletedClearTimers.current.get(orderId);
 		if (existing) { clearTimeout(existing); pendingDeletedClearTimers.current.delete(orderId); }
+	};
+
+	// Держим оптимистично созданный заказ поверх ответа сервера, пока сервер
+	// его не вернёт сам. Иначе фоновый polling стирает только что созданный заказ.
+	const markOrderCreated = (fakeId: number, order: any) => {
+		pendingCreatedOrders.current.set(fakeId, order);
+		const existing = pendingCreatedClearTimers.current.get(fakeId);
+		if (existing) clearTimeout(existing);
+		const t = setTimeout(() => {
+			const entry = pendingCreatedOrders.current.get(fakeId);
+			pendingCreatedOrders.current.delete(fakeId);
+			pendingCreatedClearTimers.current.delete(fakeId);
+			// POST так и не завершился — заказ остался "фейком", убираем зависший призрак
+			if (entry && entry.id === fakeId) {
+				setOrders(prev => {
+					const next = prev.filter(o => o.id !== fakeId);
+					localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+					return next;
+				});
+			}
+		}, 30000);
+		pendingCreatedClearTimers.current.set(fakeId, t);
+	};
+	const unmarkOrderCreated = (fakeId: number) => {
+		pendingCreatedOrders.current.delete(fakeId);
+		const existing = pendingCreatedClearTimers.current.get(fakeId);
+		if (existing) { clearTimeout(existing); pendingCreatedClearTimers.current.delete(fakeId); }
 	};
 
 	const handleArchiveOrder = async (orderId: number) => {
