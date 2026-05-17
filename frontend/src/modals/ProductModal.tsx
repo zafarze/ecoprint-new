@@ -1,6 +1,7 @@
 // src/modals/ProductModal.tsx — стиль legacy .modal
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 import React, { useEffect, useState } from 'react';
+import CustomSelect from '../components/ui/CustomSelect';
 
 interface ProductModalProps {
 	isOpen: boolean;
@@ -54,14 +55,16 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData }: P
 							</div>
 							<div className="form-group">
 								<label>Категория *</label>
-								<div className="custom-select">
-									<select value={category} onChange={e => setCategory(e.target.value)}>
-										<option value="polygraphy">Полиграфия</option>
-										<option value="packaging">Упаковка</option>
-										<option value="souvenirs">Сувениры</option>
-										<option value="large-format">Широкоформатная печать</option>
-									</select>
-								</div>
+								<CustomSelect
+									value={category}
+									onChange={setCategory}
+									options={[
+										{ value: 'polygraphy', label: 'Полиграфия' },
+										{ value: 'packaging', label: 'Упаковка' },
+										{ value: 'souvenirs', label: 'Сувениры' },
+										{ value: 'large-format', label: 'Широкоформатная печать' },
+									]}
+								/>
 							</div>
 							<div className="form-group">
 								<label>Иконка (FontAwesome)</label>

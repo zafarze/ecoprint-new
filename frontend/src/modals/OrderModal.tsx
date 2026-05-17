@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../api/api';
+import CustomSelect from '../components/ui/CustomSelect';
 
 interface OrderModalProps {
 	isOpen: boolean;
@@ -206,25 +207,23 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 											</div>
 											<div className="form-group">
 												<label>Создатель</label>
-												<div className="custom-select" style={{ width: '100%' }}>
-													<select
-														className="item-responsible-user"
-														value={item.responsible_user_id || ''}
-														onChange={e => updateItem(item.id, 'responsible_user_id', e.target.value)}
-														disabled
-													>
-														{users.length === 0 ? (
-															<option value="">— Загрузка... —</option>
-														) : (
-															users.map(u => {
-																const display = (u.first_name || u.last_name)
+												<CustomSelect
+													disabled
+													value={String(item.responsible_user_id || '')}
+													onChange={v => updateItem(item.id, 'responsible_user_id', v)}
+													className="item-responsible-user"
+													placeholder="— Загрузка... —"
+													options={
+														users.length === 0
+															? [{ value: '', label: '— Загрузка... —' }]
+															: users.map(u => ({
+																value: String(u.id),
+																label: (u.first_name || u.last_name)
 																	? `${u.first_name || ''} ${u.last_name || ''}`.trim()
-																	: u.username;
-																return <option key={u.id} value={u.id}>{display}</option>;
-															})
-														)}
-													</select>
-												</div>
+																	: u.username,
+															}))
+													}
+												/>
 											</div>
 											<div className="form-group">
 												<label>Срок сдачи *</label>
@@ -237,17 +236,16 @@ export default function OrderModal({ isOpen, onClose, onSave, initialData }: Ord
 											</div>
 											<div className="form-group">
 												<label>Статус товара</label>
-												<div className="custom-select" style={{ width: '100%' }}>
-													<select
-														className="item-status-select"
-														value={item.status}
-														onChange={e => updateItem(item.id, 'status', e.target.value)}
-													>
-														<option value="not-ready">Не готов</option>
-														<option value="in-progress">В процессе</option>
-														<option value="ready">Готов</option>
-													</select>
-												</div>
+												<CustomSelect
+													value={item.status}
+													onChange={v => updateItem(item.id, 'status', v)}
+													className="item-status-select"
+													options={[
+														{ value: 'not-ready', label: 'Не готов' },
+														{ value: 'in-progress', label: 'В процессе' },
+														{ value: 'ready', label: 'Готов' },
+													]}
+												/>
 											</div>
 										</div>
 

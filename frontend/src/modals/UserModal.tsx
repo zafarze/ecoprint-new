@@ -1,6 +1,7 @@
 // src/modals/UserModal.tsx — стиль legacy .modal
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 import React, { useEffect, useState } from 'react';
+import CustomSelect from '../components/ui/CustomSelect';
 
 interface UserModalProps {
 	isOpen: boolean;
@@ -86,13 +87,15 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }: User
 							</div>
 							<div className="form-group">
 								<label>Роль в системе *</label>
-								<div className="custom-select">
-									<select value={role} onChange={e => setRole(e.target.value)} required>
-										<option value="worker">Работник (Только Главная)</option>
-										<option value="manager">Менеджер (Главная, Товары, Архив)</option>
-										<option value="superadmin">Супер Админ (Полный доступ)</option>
-									</select>
-								</div>
+								<CustomSelect
+									value={role}
+									onChange={setRole}
+									options={[
+										{ value: 'worker', label: 'Работник (Только Главная)' },
+										{ value: 'manager', label: 'Менеджер (Главная, Товары, Архив)' },
+										{ value: 'superadmin', label: 'Супер Админ (Полный доступ)' },
+									]}
+								/>
 							</div>
 						</div>
 					</form>

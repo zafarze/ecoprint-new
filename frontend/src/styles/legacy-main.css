@@ -601,7 +601,6 @@ body::after {
         margin-bottom: 4px;
     }
     
-    .filter-group .custom-select, 
     .filter-group select {
         width: 100%;
     }
@@ -1028,31 +1027,96 @@ body::after {
     font-size: 16px;
 }
 
-.custom-select {
-    position: relative;
-}
-
-.custom-select select {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    padding-right: 45px;
-    cursor: pointer;
+/* ── CustomSelect component ─────────────────────────────────────── */
+.custom-select-trigger {
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 15px;
+    font-family: inherit;
     background: white;
+    color: var(--text-color);
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.custom-select::after {
-    content: '\f078';
-    font-family: 'Font Awesome 6 Free';
-    font-weight: 900;
-    position: absolute;
-    right: 18px;
-    top: 50%;
-    transform: translateY(-50%);
-    pointer-events: none;
-    color: var(--text-light);
-    font-size: 14px;
+.custom-select-trigger:focus-visible,
+.custom-select-trigger.is-open {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(0, 136, 204, 0.1);
 }
+
+.custom-select-trigger .fa-chevron-down {
+    color: var(--text-light);
+    transition: transform 0.2s;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+.custom-select-trigger.is-open .fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+.custom-select-trigger.is-disabled {
+    background: var(--light-gray);
+    color: var(--text-light);
+    cursor: not-allowed;
+    border-color: var(--border-color);
+    box-shadow: none;
+}
+
+.custom-select-trigger.is-disabled .fa-chevron-down {
+    opacity: 0.3;
+}
+
+.custom-select-panel {
+    background: white;
+    border: 2px solid var(--primary-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    animation: cs-fade-in 0.12s ease;
+}
+
+@keyframes cs-fade-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.custom-select-option {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: background 0.1s;
+    user-select: none;
+}
+
+.custom-select-option.is-active {
+    background: var(--primary-light);
+}
+
+.custom-select-option.is-selected {
+    background: var(--gradient);
+    color: white;
+}
+
+.custom-select-option.is-selected.is-active {
+    background: var(--gradient-hover);
+    color: white;
+}
+/* ── end CustomSelect ───────────────────────────────────────────── */
 
 .add-item-section {
     padding: 20px 30px;
