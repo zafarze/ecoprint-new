@@ -77,6 +77,8 @@ export default function OrdersPage() {
 	const pendingClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 	const pendingOrderReceived = useRef<Map<number, boolean>>(new Map());
 	const pendingOrderClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+	const pendingDeletedIds = useRef<Set<number>>(new Set());
+	const pendingDeletedClearTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 	const stablePositionRef = useRef<Map<number, number>>(new Map());
 	const fetchOrdersSilentlyRef = useRef<() => Promise<void>>(() => Promise.resolve());
 	const isModalOpenRef = useRef(false);
@@ -215,6 +217,9 @@ export default function OrdersPage() {
 		try {
 			const res = await api.get('orders/?is_archived=false');
 			const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
+			const filteredData = pendingDeletedIds.current.size > 0
+				? data.filter((o: any) => !pendingDeletedIds.current.has(o.id))
+				: data;
 			const hasPendingItems = pendingItemIds.current.size > 0;
 			const hasPendingOrders = pendingOrderReceived.current.size > 0;
 			if (hasPendingItems || hasPendingOrders) {
@@ -225,7 +230,7 @@ export default function OrdersPage() {
 							if (pendingItemIds.current.has(i.id)) pendingMap.set(i.id, i.status);
 						}));
 					}
-					const merged = normalizeOrders(data.map((o: any) => {
+					const merged = normalizeOrders(filteredData.map((o: any) => {
 						const overlaidOrder = pendingOrderReceived.current.has(o.id)
 							? { ...o, is_received: pendingOrderReceived.current.get(o.id) }
 							: o;
@@ -239,7 +244,7 @@ export default function OrdersPage() {
 					return merged;
 				});
 			} else {
-				const normalized = normalizeOrders(data);
+				const normalized = normalizeOrders(filteredData);
 				localStorage.setItem(CACHE_KEY, JSON.stringify(normalized));
 				setOrders(normalized);
 			}
@@ -300,6 +305,8 @@ export default function OrdersPage() {
 			pendingClearTimers.current.clear();
 			pendingOrderClearTimers.current.forEach(t => clearTimeout(t));
 			pendingOrderClearTimers.current.clear();
+			pendingDeletedClearTimers.current.forEach(t => clearTimeout(t));
+			pendingDeletedClearTimers.current.clear();
 			document.removeEventListener('visibilitychange', onVisible);
 			window.removeEventListener('focus', onVisible);
 			window.removeEventListener('sync-updated', doFetch);
@@ -458,13 +465,48 @@ export default function OrdersPage() {
 		}
 	};
 
+	// Планируем снятие "щита удаления" через delayMs. Перезапускает уже стоящий таймер.
+	const scheduleOrderDeletedClear = (orderId: number, delayMs: number) => {
+		const existing = pendingDeletedClearTimers.current.get(orderId);
+		if (existing) clearTimeout(existing);
+		const t = setTimeout(() => {
+			pendingDeletedIds.current.delete(orderId);
+			pendingDeletedClearTimers.current.delete(orderId);
+		}, delayMs);
+		pendingDeletedClearTimers.current.set(orderId, t);
+	};
+
+	// Помечаем заказ как "только что удалён", чтобы фоновый polling не вернул его,
+	// пока сервер ещё не отразил удаление. Запасной таймер на 30 сек — на случай
+	// если запрос вообще не вернётся (зависший fetch). На успехе/ошибке щит
+	// снимается явно (см. confirmDelete / handleArchiveOrder).
+	const markOrderDeleted = (orderId: number) => {
+		pendingDeletedIds.current.add(orderId);
+		scheduleOrderDeletedClear(orderId, 30000);
+	};
+
+	const unmarkOrderDeleted = (orderId: number) => {
+		pendingDeletedIds.current.delete(orderId);
+		const existing = pendingDeletedClearTimers.current.get(orderId);
+		if (existing) { clearTimeout(existing); pendingDeletedClearTimers.current.delete(orderId); }
+	};
+
 	const handleArchiveOrder = async (orderId: number) => {
 		const previous = [...orders];
 		const next = orders.filter(o => o.id !== orderId);
 		setOrders(next); localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 		toast.success('Заказ отправлен в архив');
-		try { await api.post(`orders/${orderId}/archive/`); broadcastChange(); notifyHeader(); }
-		catch { setOrders(previous); localStorage.setItem(CACHE_KEY, JSON.stringify(previous)); toast.error('Ошибка сети. Заказ возвращен.'); }
+		markOrderDeleted(orderId);
+		try {
+			await api.post(`orders/${orderId}/archive/`);
+			broadcastChange(); notifyHeader();
+			scheduleOrderDeletedClear(orderId, 4000);
+		}
+		catch {
+			unmarkOrderDeleted(orderId);
+			setOrders(previous); localStorage.setItem(CACHE_KEY, JSON.stringify(previous));
+			toast.error('Ошибка сети. Заказ возвращен.');
+		}
 	};
 
 	const confirmDelete = async () => {
@@ -475,8 +517,19 @@ export default function OrdersPage() {
 		setOrders(next); localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 		setIsDeleteModalOpen(false);
 		toast.success('Удалено');
-		try { await api.delete(`orders/${targetId}/`); broadcastChange(); notifyHeader(); }
-		catch { setOrders(previous); localStorage.setItem(CACHE_KEY, JSON.stringify(previous)); toast.error('Ошибка при удалении'); }
+		markOrderDeleted(targetId);
+		try {
+			await api.delete(`orders/${targetId}/`);
+			broadcastChange(); notifyHeader();
+			// Сервер подтвердил удаление. Держим щит ещё 4 сек, чтобы пережить
+			// GET-запросы polling-а, отправленные ДО подтверждения и ещё "в полёте".
+			scheduleOrderDeletedClear(targetId, 4000);
+		}
+		catch {
+			unmarkOrderDeleted(targetId);
+			setOrders(previous); localStorage.setItem(CACHE_KEY, JSON.stringify(previous));
+			toast.error('Ошибка при удалении');
+		}
 	};
 
 	// Активные продукты по факту наличия в заказах
