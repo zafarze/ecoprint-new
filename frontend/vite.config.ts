@@ -53,6 +53,11 @@ export default defineConfig({
       },
 
       workbox: {
+        // КРИТИЧНО: новый SW активируется немедленно, не ждёт закрытия всех вкладок.
+        // Иначе при апдейте часть клиентов остаётся на старом коде и real-time sync
+        // ломается из-за несовпадения формата payload между версиями.
+        skipWaiting: true,
+        clientsClaim: true,
         // Что кэшировать в SW (статика приложения)
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Поднимаем лимит precache до 5 MB (на случай больших иконок).
@@ -86,17 +91,13 @@ export default defineConfig({
               expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
-          // API запросы — NetworkFirst, чтобы свежие данные были приоритетнее
-          // НО offline получаем последние закэшированные
+          // API запросы — НЕ кэшируем через SW. Для real-time CRM критично, чтобы
+          // ответ всегда брался из сети. Offline-фолбэк уже есть на уровне OrdersPage
+          // (localStorage CACHE_KEY) — повторное кэширование в SW только отдавало
+          // устаревшие статусы и было причиной задержек "до 30 секунд".
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
+            handler: 'NetworkOnly',
           },
           // Картинки (медиа)
           {

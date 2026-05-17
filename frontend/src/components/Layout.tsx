@@ -46,7 +46,10 @@ export default function Layout() {
 		document.addEventListener('visibilitychange', onVisible);
 		window.addEventListener('focus', onVisible);
 
-		const unsubscribeFirebase = subscribeToSync(dispatch);
+		// Layout — глобальный fallback: получая sync-событие любого типа,
+		// бросаем `sync-updated` — все страницы решают сами, что с ним делать.
+		// OrdersPage уже подписан на FB напрямую и применяет payload оптимально.
+		const unsubscribeFirebase = subscribeToSync(() => dispatch());
 
 		return () => {
 			unsubscribeFirebase();
